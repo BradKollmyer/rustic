@@ -1,0 +1,58 @@
+# AWS S3 Glacier / Deep Archive as cold storage, with a hot repository for metadata.
+#
+# Daily commands (backup, snapshots, ls, forget) read the hot side and do not
+# call RestoreObject. restore / check --read-data / prune-repack warm data packs
+# via warm-up-command, then wait.
+#
+# Init:    rustic -P s3_aws_glacier_hot_cold init
+# Backup:  rustic -P s3_aws_glacier_hot_cold backup
+# Restore: rustic -P s3_aws_glacier_hot_cold restore latest /tmp/out
+#          or start RestoreObject without extracting:
+#          rustic -P s3_aws_glacier_hot_cold --dry-run --dry-run-warmup restore latest /tmp/out
+#
+# IAM on the cold bucket: s3:GetObject, s3:PutObject, s3:DeleteObject,
+# s3:ListBucket, s3:HeadObject, s3:RestoreObject.
+#
+# Do not set default_storage_class on [repository.options] (shared by hot and
+# cold). If you set it, use [repository.options-cold] only. A lifecycle rule on
+# prefix data/ would also freeze tree packs; lifecycle the whole cold bucket, or
+# omit lifecycle and set the bucket's default class.
+#
+# Glacier Instant Retrieval: GET is immediate — omit warm-up-command / wait.
+# Deep Archive Bulk restore can take 48h; GLACIER Standard is typically hours.
+
+[repository]
+repository = "opendal:s3"
+repo-hot = "/var/lib/rustic-hot"
+# fire RestoreObject for each needed pack; %path is the full S3 key including root
+warm-up-command = "aws s3api restore-object --bucket my-glacier --key %path --restore-request Days=7,GlacierJobParameters={Tier=Standard}"
+# sleep after RestoreObject. This is not a HeadObject poll.
+# Use 12h for GLACIER Standard, 48h for DEEP_ARCHIVE Bulk.
+warm-up-wait = "48h"
+warm-up-batch = 20
+
+[repository.options]
+bucket = "my-glacier"
+root = "/repo"
+region = "eu-central-1"
+# credentials: AWS env / profile, or:
+# access_key_id = "xxx"
+# secret_access_key = "xxx"
+
+# Optional: archive class on the cold operator only (metadata copies on cold
+# then also go Glacier; recovery without --repo-hot must warm keys/config).
+# [repository.options-cold]
+# default_storage_class = "DEEP_ARCHIVE"
+
+[forget]
+keep-daily = 8
+keep-weekly = 5
+keep-monthly = 13
+keep-yearly = 10
+prune = true
+
+# Prune with --repo-hot already skips rewriting mixed data packs
+# (repack-cacheable-only defaults to true). Fully unused data packs are still
+# deleted. Pass --keep-pack 90d (GLACIER / GLACIER_IR) or 180d (DEEP_ARCHIVE)
+# on forget --prune / prune to avoid AWS early-delete fees:
+#   rustic -P s3_aws_glacier_hot_cold forget --prune --keep-pack 180d

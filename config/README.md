@@ -72,6 +72,13 @@ in the [services/](/config/services/) subdirectory. Please note that these
 examples are not complete and may not work out of the box. They are intended to
 give you a starting point for your own configuration.
 
+AWS S3 Glacier / Deep Archive: use a **hot/cold** layout
+(`s3_aws_glacier_hot_cold.toml`) with `--repo-hot` and `warm-up-command`. Do
+**not** set OpenDAL `default_storage_class` to `GLACIER` / `DEEP_ARCHIVE` on a
+single-bucket repository — that archives keys, snapshots, index, and tree packs
+as well as data. See the comments in `s3_aws.toml` and
+`s3_aws_glacier_hot_cold.toml`.
+
 If you want to contribute your own configuration, please
 [open a pull request](https://rustic.cli.rs/dev-docs/contributing-to-rustic.html#submitting-pull-requests).
 
