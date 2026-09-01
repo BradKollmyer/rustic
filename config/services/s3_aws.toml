@@ -4,7 +4,8 @@
 #
 # Glacier / Deep Archive: do not set OpenDAL `default_storage_class` here.
 # That class applies to every write (keys, snapshots, index, tree packs, and
-# data packs). Use a hot/cold layout instead — see s3_aws_glacier_hot_cold.toml.
+# data packs). Use --repo-hot and rustic `data_storage_class` instead — see
+# s3_aws_glacier_hot_cold.toml.
 [repository]
 repository = "opendal:s3"
 password = "password"
@@ -15,5 +16,6 @@ access_key_id = "xxx" # this can be omitted, when AWS config is used
 secret_access_key = "xxx" # this can be omitted, when AWS config is used
 bucket = "bucket_name"
 root = "/path/to/repo"
-# Do not set default_storage_class = "GLACIER" / "DEEP_ARCHIVE" on a single-bucket
-# repo: it archives metadata too. See s3_aws_glacier_hot_cold.toml.
+# Do not set default_storage_class = "GLACIER" / "DEEP_ARCHIVE" here: it archives
+# metadata too. For Glacier data packs only, see s3_aws_glacier_hot_cold.toml
+# (`data_storage_class`).

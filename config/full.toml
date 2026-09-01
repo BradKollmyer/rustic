@@ -83,6 +83,8 @@ connections = "20" # Only opendal backends; Default: Not set
 throttle = "10kB,250MB" # limit and burst per second; only opendal backends; burst size *must* be greater than repository pack size; Default: Not set
 # Note that opendal backends use several service-dependent options which may be specified here, see
 # https://opendal.apache.org/docs/rust/opendal/services/index.html
+# S3 Glacier (rustic-only; stripped before OpenDAL): data_storage_class, enable_restore,
+# restore_days, restore_tier — see config/services/s3_aws_glacier_hot_cold.toml
 
 # Additional repository options for the hot part - depending on backend. These can be only set in the config file or
 # using env variables.
