@@ -30,6 +30,7 @@ pub(crate) mod tag;
 #[cfg(feature = "tui")]
 pub(crate) mod tui;
 pub(crate) mod version;
+pub(crate) mod warmup;
 #[cfg(feature = "webdav")]
 pub(crate) mod webdav;
 
@@ -49,7 +50,7 @@ use crate::{
         forget::ForgetCmd, init::InitCmd, key::KeyCmd, list::ListCmd, ls::LsCmd, merge::MergeCmd,
         prune::PruneCmd, repair::RepairCmd, repoinfo::RepoInfoCmd, restore::RestoreCmd,
         rewrite::RewriteCmd, self_update::SelfUpdateCmd, show_config::ShowConfigCmd,
-        snapshots::SnapshotCmd, tag::TagCmd,
+        snapshots::SnapshotCmd, tag::TagCmd, warmup::WarmupCmd,
     },
     config::RusticConfig,
 };
@@ -152,6 +153,9 @@ enum RusticCmd {
 
     /// Change tags of snapshots
     Tag(Box<TagCmd>),
+
+    /// Warm up data packs needed to restore a snapshot (or path)
+    Warmup(Box<WarmupCmd>),
 
     /// Start a webdav server which allows to access the repository
     #[cfg(feature = "webdav")]

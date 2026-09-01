@@ -23,8 +23,12 @@ pub(crate) struct RestoreCmd {
     snap: String,
 
     /// Restore destination
-    #[clap(value_name = "DESTINATION")]
-    dest: String,
+    #[clap(value_name = "DESTINATION", required_unless_present = "warmup_only")]
+    dest: Option<String>,
+
+    /// Only start warmup for packs this restore would read; do not extract files
+    #[clap(long)]
+    warmup_only: bool,
 
     /// Restore options
     #[clap(flatten)]
@@ -67,7 +71,24 @@ impl RestoreCmd {
         ls_opts.recursive = true;
         let ls = repo.ls(&node, &ls_opts)?;
 
-        let dest = LocalDestination::new(&self.dest, true, !node.is_dir())?;
+        if self.warmup_only {
+            let packs = if let Some(dest) = &self.dest {
+                let dest = LocalDestination::new(dest, false, !node.is_dir())?;
+                let restore_infos = repo.prepare_restore(&self.opts, ls, &dest, true)?;
+                restore_infos.to_packs()
+            } else {
+                repo.packs_for_nodes(ls)?
+            };
+            println!("warming up {} pack(s)", packs.len());
+            repo.warm_up(packs.into_iter())?;
+            return Ok(());
+        }
+
+        let dest = LocalDestination::new(
+            self.dest.as_ref().expect("destination is required"),
+            true,
+            !node.is_dir(),
+        )?;
 
         let restore_infos = repo.prepare_restore(&self.opts, ls, &dest, dry_run)?;
 
