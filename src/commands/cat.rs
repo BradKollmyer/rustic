@@ -6,7 +6,10 @@ use abscissa_core::{Command, Runnable, Shutdown};
 
 use anyhow::Result;
 
-use rustic_core::repofile::{BlobType, FileType};
+use rustic_core::{
+    DataId,
+    repofile::{BlobType, FileType},
+};
 
 /// `cat` subcommand
 ///
@@ -40,6 +43,10 @@ enum CatSubCmd {
 struct IdOpt {
     /// Id to display
     id: String,
+
+    /// Fail if the pack is still cold; do not request RestoreObject
+    #[clap(long)]
+    require_warm: bool,
 }
 
 #[derive(clap::Parser, Debug)]
@@ -74,9 +81,14 @@ impl CatCmd {
             CatSubCmd::TreeBlob(opt) => config
                 .repository
                 .run_indexed(|repo| Ok(repo.cat_blob(BlobType::Tree, &opt.id)?))?,
-            CatSubCmd::DataBlob(opt) => config
-                .repository
-                .run_indexed(|repo| Ok(repo.cat_blob(BlobType::Data, &opt.id)?))?,
+            CatSubCmd::DataBlob(opt) => config.repository.run_indexed(|repo| {
+                if opt.require_warm {
+                    let id: DataId = opt.id.parse()?;
+                    let ie = repo.get_index_entry(&id)?;
+                    repo.require_warm(std::iter::once(ie.pack))?;
+                }
+                Ok(repo.cat_blob(BlobType::Data, &opt.id)?)
+            })?,
             CatSubCmd::Tree(opt) => config.repository.run_indexed(|repo| {
                 Ok(repo.cat_tree(&opt.snap, |sn| config.snapshot_filter.matches(sn))?)
             })?,

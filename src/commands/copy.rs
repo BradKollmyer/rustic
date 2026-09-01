@@ -43,6 +43,12 @@ pub struct CopyCmd {
     #[merge(skip)]
     force: bool,
 
+    /// Fail if source data packs are still cold; do not request RestoreObject
+    #[clap(long)]
+    #[serde(skip)]
+    #[merge(skip)]
+    require_warm: bool,
+
     /// Key options (when using --init)
     #[clap(flatten, next_help_heading = "Key options (when using --init)")]
     #[serde(skip)]
@@ -83,6 +89,9 @@ impl CopyCmd {
     fn inner_run(&self, repo: IndexedRepo) -> Result<()> {
         let config = RUSTIC_APP.config();
         let config = config;
+        if self.require_warm {
+            repo.require_warm(std::iter::empty::<rustic_core::repofile::SnapshotId>())?;
+        }
         let mut snapshots = get_snapots_from_ids(&repo, &self.ids)?;
         // sort for nicer output
         snapshots.sort_unstable();

@@ -18,8 +18,12 @@ pub(crate) struct WarmupCmd {
     snap: String,
 
     /// Wait until warmup finishes (uses `--warm-up-wait` / `--warm-up-wait-command`)
-    #[clap(long)]
+    #[clap(long, conflicts_with = "status")]
     wait: bool,
+
+    /// Print warm/warming/cold counts and exit 0 only if all packs are warm
+    #[clap(long)]
+    status: bool,
 
     /// Snapshot filter options (when using latest)
     #[clap(
@@ -52,6 +56,27 @@ impl WarmupCmd {
         ls_opts.recursive = true;
         let ls = repo.ls(&node, &ls_opts)?;
         let packs = repo.packs_for_nodes(ls)?;
+
+        if self.status {
+            let statuses = repo.warmup_status(packs.into_iter())?;
+            let mut warm = 0;
+            let mut warming = 0;
+            let mut cold = 0;
+            for (_, status) in &statuses {
+                match status {
+                    rustic_core::WarmupStatus::Warm | rustic_core::WarmupStatus::Lukewarm => {
+                        warm += 1;
+                    }
+                    rustic_core::WarmupStatus::Warming => warming += 1,
+                    rustic_core::WarmupStatus::Cold => cold += 1,
+                }
+            }
+            println!("warm={warm} warming={warming} cold={cold}");
+            if warming > 0 || cold > 0 {
+                anyhow::bail!("not all packs are warm");
+            }
+            return Ok(());
+        }
 
         println!("warming up {} pack(s)", packs.len());
 

@@ -56,6 +56,11 @@ pub struct WebDavCmd {
     #[merge(strategy=conflate::option::overwrite_none)]
     file_access: Option<String>,
 
+    /// Fail if snapshot data packs are still cold; do not request RestoreObject
+    #[clap(long)]
+    #[merge(strategy=conflate::bool::overwrite_false)]
+    require_warm: bool,
+
     /// Specify directly which snapshot/path to serve
     ///
     /// Snapshot can be identified the following ways: "01a2b3c4" or "latest" or "latest~N" (N >= 0)
@@ -111,6 +116,13 @@ impl WebDavCmd {
         let vfs = if let Some(snap) = &config.webdav.snapshot_path {
             let node =
                 repo.node_from_snapshot_path(snap, |sn| config.snapshot_filter.matches(sn))?;
+            if config.webdav.require_warm {
+                let mut ls_opts = rustic_core::LsOptions::default();
+                ls_opts.recursive = true;
+                let ls = repo.ls(&node, &ls_opts)?;
+                let packs = repo.packs_for_nodes(ls)?;
+                repo.require_warm(packs.into_iter())?;
+            }
             Vfs::from_dir_node(&node)
         } else {
             let snapshots = get_filtered_snapshots(&repo)?;

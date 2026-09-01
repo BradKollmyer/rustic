@@ -46,6 +46,11 @@ pub struct MountCmd {
     #[merge(strategy=conflate::option::overwrite_none)]
     file_access: Option<FilePolicy>,
 
+    /// Fail if snapshot data packs are still cold; do not request RestoreObject
+    #[clap(long)]
+    #[merge(strategy=conflate::bool::overwrite_false)]
+    require_warm: bool,
+
     /// The mount point to use
     #[clap(value_name = "PATH")]
     #[merge(strategy=conflate::option::overwrite_none)]
@@ -133,6 +138,13 @@ impl MountCmd {
         let vfs = if let Some(snap) = &config.mount.snapshot_path {
             let node =
                 repo.node_from_snapshot_path(snap, |sn| config.snapshot_filter.matches(sn))?;
+            if config.mount.require_warm {
+                let mut ls_opts = rustic_core::LsOptions::default();
+                ls_opts.recursive = true;
+                let ls = repo.ls(&node, &ls_opts)?;
+                let packs = repo.packs_for_nodes(ls)?;
+                repo.require_warm(packs.into_iter())?;
+            }
             Vfs::from_dir_node(&node)
         } else {
             let snapshots = get_filtered_snapshots(&repo)?;

@@ -41,6 +41,10 @@ pub(crate) struct DumpCmd {
 
     #[clap(flatten, next_help_heading = "Exclude options")]
     excludes: Excludes,
+
+    /// Fail if needed data packs are still cold; do not request RestoreObject
+    #[clap(long)]
+    require_warm: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromStr)]
@@ -71,6 +75,14 @@ impl DumpCmd {
 
         let node =
             repo.node_from_snapshot_path(&self.snap, |sn| config.snapshot_filter.matches(sn))?;
+
+        if self.require_warm {
+            let mut ls_opts = LsOptions::default();
+            ls_opts.recursive = true;
+            let ls = repo.ls(&node, &ls_opts)?;
+            let packs = repo.packs_for_nodes(ls)?;
+            repo.require_warm(packs.into_iter())?;
+        }
 
         let stdout = std::io::stdout();
 
