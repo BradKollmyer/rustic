@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- native Storj backend (`storj:bucket/prefix`) via the `storj` crate; see `config/services/storj.toml`
+
 ## [0.11.4](https://github.com/rustic-rs/rustic/compare/v0.11.3...v0.11.4) - 2026-08-17
 
 ### Added

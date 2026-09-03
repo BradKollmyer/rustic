@@ -73,6 +73,12 @@ in the [services/](/config/services/) subdirectory. Please note that these
 examples are not complete and may not work out of the box. They are intended to
 give you a starting point for your own configuration.
 
+Storj: use the native Uplink backend (`storj.toml`, `repository = "storj:bucket/prefix"`)
+with an access grant. That path talks to storage nodes directly (client-side
+erasure coding, ~2.68× upload). For cheaper uploads through the S3 gateway, use
+`s3_idrive.toml` as a template with `endpoint = "https://gateway.storjshare.io"`.
+Do not mix native and S3 writes on the same prefix.
+
 If you want to contribute your own configuration, please
 [open a pull request](https://rustic.cli.rs/dev-docs/contributing-to-rustic.html#submitting-pull-requests).
 

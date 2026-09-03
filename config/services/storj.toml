@@ -1,0 +1,23 @@
+# rustic config for a native Storj Uplink repository.
+#
+# Native uplink encrypts and erasure-codes on the client (~2.68× upload vs S3).
+# Restores talk to storage nodes directly (no hosted gateway).
+#
+# Prefer access-file or STORJ_ACCESS over putting the grant in this file.
+# Do not mix this backend with opendal:s3 on the same bucket prefix.
+#
+# Pack size ~60 MiB matches Storj's 64 MiB segment size (restic's Storj guide).
+
+[repository]
+repository = "storj:bucket-name/rustic-repo"
+password = "password"
+
+[repository.options]
+access-file = "/root/storj.grant"
+# access-command = "cat /root/storj.grant"
+# retry = "default"
+
+# Applied at `rustic init`. 60 MiB sits near Storj's 64 MiB segment size.
+[init]
+set-datapack-size = "60 MiB"
+set-datapack-size-limit = "60 MiB"
