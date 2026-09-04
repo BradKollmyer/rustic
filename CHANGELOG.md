@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- do not write console logs over the interactive TUI; print them after the TUI exits
+
 ## [0.11.4](https://github.com/rustic-rs/rustic/compare/v0.11.3...v0.11.4) - 2026-08-17
 
 ### Added
