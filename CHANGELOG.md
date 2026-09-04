@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- native Storj backend (`storj:bucket/prefix`) via the `storj` crate; see `config/services/storj.toml`
+
 ### Fixed
 
 - do not write console logs over the interactive TUI; print them after the TUI exits
