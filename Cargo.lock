@@ -5755,7 +5755,7 @@ dependencies = [
  "rhai",
  "rstest",
  "rustic_backend",
- "rustic_core 0.13.0 (git+https://github.com/rustic-rs/rustic_core)",
+ "rustic_core 0.13.0 (git+https://github.com/BradKollmyer/rustic_core?branch=dev)",
  "rustic_testing",
  "scopeguard",
  "self_update",
@@ -5775,7 +5775,7 @@ dependencies = [
 [[package]]
 name = "rustic_backend"
 version = "0.7.0"
-source = "git+https://github.com/rustic-rs/rustic_core#6fa7b56ebc750c6af0e6bc6bbe90c1781b60a38d"
+source = "git+https://github.com/BradKollmyer/rustic_core?branch=dev#51bebd291e67e3674678a3a638c23a85509626ef"
 dependencies = [
  "aho-corasick",
  "backon",
@@ -5794,7 +5794,7 @@ dependencies = [
  "rand 0.10.2",
  "rayon",
  "reqwest",
- "rustic_core 0.13.0 (git+https://github.com/rustic-rs/rustic_core)",
+ "rustic_core 0.13.0 (git+https://github.com/BradKollmyer/rustic_core?branch=dev)",
  "semver",
  "serde",
  "strum",
@@ -5868,7 +5868,7 @@ dependencies = [
 [[package]]
 name = "rustic_core"
 version = "0.13.0"
-source = "git+https://github.com/rustic-rs/rustic_core#6fa7b56ebc750c6af0e6bc6bbe90c1781b60a38d"
+source = "git+https://github.com/BradKollmyer/rustic_core?branch=dev#51bebd291e67e3674678a3a638c23a85509626ef"
 dependencies = [
  "aes256ctr_poly1305aes",
  "backon",
