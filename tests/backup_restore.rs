@@ -50,6 +50,44 @@ fn setup() -> TestResult<TempDir> {
 }
 
 #[test]
+fn test_parallel_backup_options_reach_core() -> TestResult<()> {
+    let temp_dir = setup()?;
+    let source = temp_dir.path().join("source");
+    std::fs::create_dir(&source)?;
+    std::fs::write(source.join("data"), b"parallel backup CLI regression")?;
+
+    rustic_runner(&temp_dir)?
+        .args([
+            "backup",
+            "--parallel-uploads",
+            "--backup-upload-buffer",
+            "0B",
+        ])
+        .arg(&source)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "Parallel backup pack target exceeds",
+        ));
+
+    rustic_runner(&temp_dir)?
+        .args([
+            "backup",
+            "--parallel-uploads",
+            "--backup-upload-buffer",
+            "1GiB",
+        ])
+        .arg(&source)
+        .assert()
+        .success();
+    rustic_runner(&temp_dir)?
+        .args(["check", "--read-data"])
+        .assert()
+        .success();
+    Ok(())
+}
+
+#[test]
 fn test_backup_and_check_passes() -> TestResult<()> {
     let temp_dir = setup()?;
     let backup = src_snapshot()?.into_path();

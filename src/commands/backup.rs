@@ -27,7 +27,7 @@ use log::{debug, error, info, warn};
 use rustic_backend::OpenDALBackend;
 use rustic_core::{ChildStdoutSource, Excludes, LocalSource, ReadSource, StdinSource, StringList};
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
+use serde_with::{DisplayFromStr, serde_as};
 
 use rustic_core::{
     BackupOptions, CommandInput, ConfigOptions, KeyOptions, LocalSourceFilterOptions,
@@ -76,6 +76,17 @@ pub struct BackupCmd {
     #[clap(skip)]
     #[merge(skip)]
     name: Option<String>,
+
+    /// Upload backup packs in parallel, using up to five workers and the backend connection limit.
+    #[clap(long)]
+    #[merge(strategy=conflate::bool::overwrite_false)]
+    parallel_uploads: bool,
+
+    /// Limit completed parallel backup pack buffers (default: 1 GiB). Small buffers reduce concurrency.
+    #[clap(long, value_name = "SIZE")]
+    #[merge(strategy=conflate::option::overwrite_none)]
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    backup_upload_buffer: Option<bytesize::ByteSize>,
 
     /// Set filename to be used when backing up from stdin (default: "stdin")
     #[clap(long, value_name = "FILENAME", value_hint = ValueHint::FilePath)]
@@ -471,6 +482,8 @@ impl BackupCmd {
         parent_opts.group_by = parent_opts.group_by.or(config.global.group_by);
 
         let backup_opts = BackupOptions::default()
+            .parallel_uploads(self.parallel_uploads)
+            .backup_upload_buffer(self.backup_upload_buffer)
             .stdin_filename(self.stdin_filename.unwrap_or_else(|| "stdin".to_string()))
             .stdin_command(self.stdin_command)
             .as_path(self.as_path)
@@ -806,4 +819,41 @@ fn publish_metrics(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod parallel_upload_tests {
+    use super::BackupCmd;
+    use bytesize::ByteSize;
+    use clap::Parser;
+    use conflate::Merge;
+
+    #[test]
+    fn parses_parallel_upload_flags() {
+        let opts = BackupCmd::try_parse_from([
+            "backup",
+            "--parallel-uploads",
+            "--backup-upload-buffer",
+            "1GiB",
+            "/source",
+        ])
+        .unwrap();
+        assert!(opts.parallel_uploads);
+        assert_eq!(opts.backup_upload_buffer, Some(ByteSize::gib(1)));
+        let defaults = BackupCmd::try_parse_from(["backup", "/source"]).unwrap();
+        assert!(!defaults.parallel_uploads);
+        assert_eq!(defaults.backup_upload_buffer, None);
+    }
+
+    #[test]
+    fn merges_config_parallel_uploads_with_cli_buffer() {
+        let config: BackupCmd =
+            toml::from_str("parallel-uploads = true\nbackup-upload-buffer = '1GiB'").unwrap();
+        let mut opts =
+            BackupCmd::try_parse_from(["backup", "--backup-upload-buffer", "512MiB", "/source"])
+                .unwrap();
+        opts.merge(config);
+        assert!(opts.parallel_uploads);
+        assert_eq!(opts.backup_upload_buffer, Some(ByteSize::mib(512)));
+    }
 }
