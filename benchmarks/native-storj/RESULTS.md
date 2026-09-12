@@ -70,3 +70,11 @@ SDK regression validation: the first spare now launches at1s rather than25.3s
 under simulated trickling completions, with no change to the35-attempt cap.
 136 SDK unit/API/mock tests pass, one pre-existing ignored test. The initial
 sandbox suite's unrelated loopback-bind failure passed with socket permission.
+
+### Test03: unprofiled baseline repeat, five connections
+
+`baseline-c5-b.Uswlr2`: wall154.03s, CPU15.09s user +5.32s system.
+All100 files/1,849,631,128 bytes verified; restore and runner exited0,
+no warnings. No sampling or concurrent compilation. This is close to the
+profiled baseline160.92s; the candidate's100.88s remains1.53× faster than
+this unprofiled repeat. Next: repeat the candidate before concurrency tuning.
