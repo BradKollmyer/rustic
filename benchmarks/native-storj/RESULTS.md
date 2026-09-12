@@ -103,3 +103,11 @@ connections in its cap (1100 for this setting); no pool changes were made.
 Next test uses the existing restore ceiling of20 connections, still with
 the8192 descriptor limit and the same bounded scheduler. This is an explicit
 benchmark setting, not a change to the backend default of5.
+
+### Test06: fixed cadence, twenty connections
+
+`fixed-c20-a.T5765p`: wall35.56s, CPU15.01s user +5.21s system,
+49.60MiB/s payload throughput. All100 files/1,849,631,128 bytes verified;
+restore and runner exited0, no warnings. The same binary at20 connections
+is1.52× faster than Test05 at10. Repeat10 then20 before selecting the
+full-day confirmation setting; do not infer a general default from one Mac.
