@@ -1,0 +1,10 @@
+[repository]
+repository = "storj:photos"
+password-file = "${STORJ_BENCH_PASSWORD_FILE}"
+cache-dir = "${STORJ_BENCH_ROOT}/cache"
+
+[repository.options]
+access-file = "${STORJ_BENCH_ACCESS_FILE}"
+connections = "${STORJ_BENCH_CONNECTIONS}"
+message-timeout = "20"
+download-hedge-delay = "1"
