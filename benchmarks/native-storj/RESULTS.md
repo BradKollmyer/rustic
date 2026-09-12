@@ -175,10 +175,17 @@ Clippy passes for all targets with warnings denied; formatting and diff checks
 pass. The CLI built offline in release mode using the sibling SDK worktree,
 with the same release features, disabled LTO and 16 codegen units as baseline.
 
+For publishing, the CLI now pins SDK commit
+`a2f680843d560f2e72a5e03908032f81d60da6c0` from the GitHub fork instead of
+the sibling SDK checkout. It contains the same tested scheduler code plus
+documentation updates; new builds do not require the local SDK worktree.
+`cargo check --features release --bin rustic` passes with this Git dependency.
+
 All nine live test results were committed separately. The original source
 checkouts and their unrelated edits remain unchanged; the core worktree was
-created for isolation but needed no code changes. Experimental code is not
-merged, pushed or deployed to arc. The backend default remains five connections.
+created for isolation but needed no code changes. Experimental code remains on
+the performance branches, not merged or deployed to arc. The backend default
+remains five connections.
 Twenty is an opt-in setting tested on this Mac with an 8192 descriptor limit;
 allow for its higher memory/socket use. Speculative-transfer bytes were not
 measured, so the latency improvement is not a claim of unchanged egress cost.

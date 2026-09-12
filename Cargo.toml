@@ -209,9 +209,9 @@ lto = true
 debug-assertions = false
 codegen-units = 1
 
-# Experiment-only sibling SDK worktree; tested revisions are in the benchmark log.
+# Pin the validated fixed-cadence scheduler; benchmark results are recorded locally.
 [patch.crates-io]
-storj = { path = "../storj-native-iterations/crates/storj" }
+storj = { git = "https://github.com/BradKollmyer/storj-uplink.git", rev = "a2f680843d560f2e72a5e03908032f81d60da6c0" }
 
 # Allows quick RPM file generation, if "cargo-generate-rpm" is installed:
 #  cargo build --release; cargo generate-rpm

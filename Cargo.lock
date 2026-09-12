@@ -7109,6 +7109,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "storj"
 version = "1.1.0"
+source = "git+https://github.com/BradKollmyer/storj-uplink.git?rev=a2f680843d560f2e72a5e03908032f81d60da6c0#a2f680843d560f2e72a5e03908032f81d60da6c0"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -7128,6 +7129,7 @@ dependencies = [
 [[package]]
 name = "storj-access"
 version = "1.1.0"
+source = "git+https://github.com/BradKollmyer/storj-uplink.git?rev=a2f680843d560f2e72a5e03908032f81d60da6c0#a2f680843d560f2e72a5e03908032f81d60da6c0"
 dependencies = [
  "bs58",
  "getrandom 0.4.3",
@@ -7141,6 +7143,7 @@ dependencies = [
 [[package]]
 name = "storj-ec"
 version = "1.1.0"
+source = "git+https://github.com/BradKollmyer/storj-uplink.git?rev=a2f680843d560f2e72a5e03908032f81d60da6c0#a2f680843d560f2e72a5e03908032f81d60da6c0"
 dependencies = [
  "thiserror 2.0.20",
 ]
@@ -7148,6 +7151,7 @@ dependencies = [
 [[package]]
 name = "storj-encryption"
 version = "1.1.0"
+source = "git+https://github.com/BradKollmyer/storj-uplink.git?rev=a2f680843d560f2e72a5e03908032f81d60da6c0#a2f680843d560f2e72a5e03908032f81d60da6c0"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -7161,6 +7165,7 @@ dependencies = [
 [[package]]
 name = "storj-proto"
 version = "1.1.0"
+source = "git+https://github.com/BradKollmyer/storj-uplink.git?rev=a2f680843d560f2e72a5e03908032f81d60da6c0#a2f680843d560f2e72a5e03908032f81d60da6c0"
 dependencies = [
  "prost",
  "prost-types",
@@ -7171,6 +7176,7 @@ dependencies = [
 [[package]]
 name = "storj-rpc"
 version = "1.1.0"
+source = "git+https://github.com/BradKollmyer/storj-uplink.git?rev=a2f680843d560f2e72a5e03908032f81d60da6c0#a2f680843d560f2e72a5e03908032f81d60da6c0"
 dependencies = [
  "bs58",
  "futures-util",
@@ -7192,6 +7198,7 @@ dependencies = [
 [[package]]
 name = "storj-uplink"
 version = "1.1.0"
+source = "git+https://github.com/BradKollmyer/storj-uplink.git?rev=a2f680843d560f2e72a5e03908032f81d60da6c0#a2f680843d560f2e72a5e03908032f81d60da6c0"
 dependencies = [
  "blake3",
  "ed25519-dalek",
