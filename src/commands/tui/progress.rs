@@ -20,7 +20,9 @@ impl TuiProgressBars {
             data: Arc::new(RwLock::new(CounterData::new(prefix))),
             progress_type,
         };
-        progress.popup();
+        if !matches!(progress_type, ProgressType::Status) {
+            progress.popup();
+        }
         Progress::new(progress)
     }
 }

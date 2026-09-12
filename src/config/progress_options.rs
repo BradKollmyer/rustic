@@ -3,6 +3,7 @@
 use std::{fmt::Write, io::Write as _, time::Duration};
 
 use std::io::IsTerminal;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
@@ -138,15 +139,43 @@ impl ProgressBars for ProgressOptions {
 pub struct InteractiveProgress {
     bar: ProgressBar,
     kind: ProgressType,
+    tick_interval: Duration,
+    shown: Arc<AtomicBool>,
 }
 
 impl InteractiveProgress {
     fn new(prefix: &str, kind: ProgressType, tick_interval: Duration) -> Self {
         let style = Self::initial_style(kind);
-        let bar = multi_progress().add(ProgressBar::new(0).with_style(style));
+        let bar = ProgressBar::new(0).with_style(style);
         bar.set_prefix(prefix.to_string());
-        bar.enable_steady_tick(tick_interval);
-        Self { bar, kind }
+        let shown = !matches!(kind, ProgressType::Status);
+        if shown {
+            let bar = multi_progress().add(bar);
+            bar.enable_steady_tick(tick_interval);
+            return Self {
+                bar,
+                kind,
+                tick_interval,
+                shown: Arc::new(AtomicBool::new(true)),
+            };
+        }
+        Self {
+            bar,
+            kind,
+            tick_interval,
+            shown: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    fn ensure_shown(&self) {
+        if self
+            .shown
+            .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+        {
+            let _ = multi_progress().add(self.bar.clone());
+            self.bar.enable_steady_tick(self.tick_interval);
+        }
     }
 
     #[allow(clippy::literal_string_with_formatting_args)]
@@ -206,11 +235,17 @@ impl RusticProgress for InteractiveProgress {
     }
 
     fn finish(&self) {
+        if matches!(self.kind, ProgressType::Status) && !self.shown.load(Ordering::Relaxed) {
+            return;
+        }
         self.bar.finish_with_message("done");
     }
 
     fn set_message(&self, msg: &str) {
         self.bar.set_message(msg.to_string());
+        if matches!(self.kind, ProgressType::Status) {
+            self.ensure_shown();
+        }
     }
 }
 
@@ -335,13 +370,15 @@ impl RusticProgress for NonInteractiveProgress {
             return;
         };
 
-        if matches!(self.kind, ProgressType::Status) && !state.message.is_empty() {
-            info!(
-                "{}: {} done in {:.2?}",
-                state.prefix,
-                state.message,
-                self.start.elapsed()
-            );
+        if matches!(self.kind, ProgressType::Status) {
+            if !state.message.is_empty() {
+                info!(
+                    "{}: {} done in {:.2?}",
+                    state.prefix,
+                    state.message,
+                    self.start.elapsed()
+                );
+            }
             return;
         }
 
@@ -497,6 +534,13 @@ impl RusticProgress for JsonProgress {
         let Ok(state) = self.state.lock() else {
             return;
         };
+        if matches!(self.kind, ProgressType::Status)
+            && state.files_new.is_none()
+            && state.files_changed.is_none()
+            && state.bytes_added.is_none()
+        {
+            return;
+        }
 
         self.log_progress(&state);
     }
