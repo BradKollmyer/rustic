@@ -17,7 +17,7 @@ use log::info;
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 
-use rustic_core::{Progress, ProgressBars, ProgressType, RusticProgress};
+use rustic_core::{Progress, ProgressBars, ProgressType, RusticProgress, format_upload_stats};
 
 /// Returns the global `MultiProgress` instance used by all interactive progress bars.
 ///
@@ -101,7 +101,9 @@ impl ProgressOptions {
 
         let interval = self.log_interval();
         if self.json_progress {
-            return if interval > Duration::ZERO && matches!(kind, ProgressType::Bytes) {
+            return if interval > Duration::ZERO
+                && matches!(kind, ProgressType::Bytes | ProgressType::Status)
+            {
                 Progress::new(JsonProgress::new(prefix, interval, kind))
             } else {
                 Progress::hidden()
@@ -155,6 +157,7 @@ impl InteractiveProgress {
             ProgressType::Bytes => {
                 "[{elapsed_precise}] {prefix:30} {bar:40.cyan/blue} {bytes:>10}            {bytes_per_sec:12}"
             }
+            ProgressType::Status => "[{elapsed_precise}] {prefix:30} {msg}",
         };
         ProgressStyle::default_bar().template(template).unwrap()
     }
@@ -162,7 +165,7 @@ impl InteractiveProgress {
     #[allow(clippy::literal_string_with_formatting_args)]
     fn style_with_length(kind: ProgressType) -> ProgressStyle {
         match kind {
-            ProgressType::Spinner => Self::initial_style(kind),
+            ProgressType::Spinner | ProgressType::Status => Self::initial_style(kind),
             ProgressType::Counter => ProgressStyle::default_bar()
                 .template("[{elapsed_precise}] {prefix:30} {bar:40.cyan/blue} {pos:>10}/{len:10}")
                 .unwrap(),
@@ -205,6 +208,10 @@ impl RusticProgress for InteractiveProgress {
     fn finish(&self) {
         self.bar.finish_with_message("done");
     }
+
+    fn set_message(&self, msg: &str) {
+        self.bar.set_message(msg.to_string());
+    }
 }
 
 // ================ Non-Interactive ================
@@ -217,13 +224,22 @@ struct NonInteractiveState {
     length: Option<u64>,
     last_log: Instant,
     error_count: u64,
+    message: String,
+    files_new: Option<u64>,
+    files_changed: Option<u64>,
+    bytes_added: Option<u64>,
 }
 
 impl NonInteractiveState {
     fn progress_text(&self, kind: ProgressType) -> String {
+        if matches!(kind, ProgressType::Status) && !self.message.is_empty() {
+            return self.message.clone();
+        }
         let format_value = |value| match kind {
             ProgressType::Bytes => ByteSize(value).to_string(),
-            ProgressType::Counter | ProgressType::Spinner => value.to_string(),
+            ProgressType::Counter | ProgressType::Spinner | ProgressType::Status => {
+                value.to_string()
+            }
         };
 
         self.length.map_or_else(
@@ -261,6 +277,10 @@ impl NonInteractiveProgress {
                 length: None,
                 last_log: now,
                 error_count: 0,
+                message: String::new(),
+                files_new: None,
+                files_changed: None,
+                bytes_added: None,
             })),
             start: now,
             interval,
@@ -271,7 +291,9 @@ impl NonInteractiveProgress {
     fn format_value(&self, value: u64) -> String {
         match self.kind {
             ProgressType::Bytes => ByteSize(value).to_string(), // delegate bytesize handling
-            ProgressType::Counter | ProgressType::Spinner => value.to_string(),
+            ProgressType::Counter | ProgressType::Spinner | ProgressType::Status => {
+                value.to_string()
+            }
         }
     }
 
@@ -313,12 +335,32 @@ impl RusticProgress for NonInteractiveProgress {
             return;
         };
 
+        if matches!(self.kind, ProgressType::Status) && !state.message.is_empty() {
+            info!(
+                "{}: {} done in {:.2?}",
+                state.prefix,
+                state.message,
+                self.start.elapsed()
+            );
+            return;
+        }
+
         info!(
             "{}: {} done in {:.2?}",
             state.prefix,
             self.format_value(state.position),
             self.start.elapsed()
         );
+    }
+
+    fn set_message(&self, msg: &str) {
+        if let Ok(mut state) = self.state.lock() {
+            state.message = msg.to_string();
+            if state.should_log(self.interval) {
+                self.log_progress(&state);
+                state.mark_logged();
+            }
+        }
     }
 }
 
@@ -345,6 +387,12 @@ struct JsonProgressStatus {
     total_bytes: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     bytes_done: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    files_new: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    files_changed: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bytes_added: Option<u64>,
     error_count: u64,
 }
 
@@ -371,6 +419,10 @@ impl JsonProgress {
                 length: None,
                 last_log: now,
                 error_count: 0,
+                message: String::new(),
+                files_new: None,
+                files_changed: None,
+                bytes_added: None,
             })),
             start: now,
             interval,
@@ -399,6 +451,9 @@ impl JsonProgress {
             percent_done,
             total_bytes: is_bytes.then_some(state.length).flatten(),
             bytes_done: is_bytes.then_some(state.position),
+            files_new: state.files_new,
+            files_changed: state.files_changed,
+            bytes_added: state.bytes_added,
             error_count: state.error_count,
         };
 
@@ -444,6 +499,19 @@ impl RusticProgress for JsonProgress {
         };
 
         self.log_progress(&state);
+    }
+
+    fn set_upload_stats(&self, files_new: u64, files_changed: u64, bytes_added: u64) {
+        if let Ok(mut state) = self.state.lock() {
+            state.files_new = Some(files_new);
+            state.files_changed = Some(files_changed);
+            state.bytes_added = Some(bytes_added);
+            state.message = format_upload_stats(files_new, files_changed, bytes_added);
+            if state.should_log(self.interval) {
+                self.log_progress(&state);
+                state.mark_logged();
+            }
+        }
     }
 
     fn error(&self, item: Option<&str>, during: &str, message: &str) {

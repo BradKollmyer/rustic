@@ -37,6 +37,7 @@ struct CounterData {
     begin: SystemTime,
     length: Option<u64>,
     count: u64,
+    message: String,
 }
 
 impl CounterData {
@@ -46,6 +47,7 @@ impl CounterData {
             begin: SystemTime::now(),
             length: None,
             count: 0,
+            message: String::new(),
         }
     }
 }
@@ -105,6 +107,9 @@ impl TuiProgress {
                     length.map_or(String::new(), |l| format!("/{}", ByteSize(l).display()))
                 )
             }
+            ProgressType::Status => {
+                format!("{} {prefix} {}", fmt_duration(elapsed), data.message)
+            }
         };
         drop(data);
 
@@ -113,7 +118,7 @@ impl TuiProgress {
             .draw(|f| {
                 let area = f.area();
                 match self.progress_type {
-                    ProgressType::Spinner => {
+                    ProgressType::Spinner | ProgressType::Status => {
                         let mut popup = popup_text("progress", message.into());
                         popup.draw(area, f);
                     }
@@ -145,4 +150,8 @@ impl RusticProgress for TuiProgress {
         self.popup();
     }
     fn finish(&self) {}
+    fn set_message(&self, msg: &str) {
+        self.data.write().unwrap().message = msg.to_string();
+        self.popup();
+    }
 }
