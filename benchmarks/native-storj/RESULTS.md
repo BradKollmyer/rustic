@@ -53,3 +53,20 @@ within one64MiB Storj segment. The current scheduler recreates its1s sleep
 after every completion, so sub-second trickling successes postpone spares.
 Test a persistent launch deadline while retaining the same35-attempt production
 speculative cap, immediate failure replacements and cancellation safeguards.
+
+### Test02: fixed cadence, five connections
+
+SDK `f0e18e6`; release binary stamp `0.11.4-native-fixed-hedge-iteration1`.
+Built with the same release features, LTO disabled and16 codegen units as the
+baseline. The CLI patch points to the sibling SDK experiment worktree; core
+code remains pinned to `acd990e`.
+
+`fixed-c5-a.ShCTod`: wall100.88s, CPU14.79s user +5.07s system,
+17.49MiB/s payload throughput. All100 files/1,849,631,128 bytes verified;
+restore and runner exited0, no warnings. This is1.60× faster than Test01
+(37.3% less wall time), but needs an unprofiled/interleaved baseline repeat.
+
+SDK regression validation: the first spare now launches at1s rather than25.3s
+under simulated trickling completions, with no change to the35-attempt cap.
+136 SDK unit/API/mock tests pass, one pre-existing ignored test. The initial
+sandbox suite's unrelated loopback-bind failure passed with socket permission.

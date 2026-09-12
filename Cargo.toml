@@ -209,9 +209,9 @@ lto = true
 debug-assertions = false
 codegen-units = 1
 
-# Pin bounded speculative downloads until a crates.io release includes them.
+# Experiment-only sibling SDK worktree; tested revisions are in the benchmark log.
 [patch.crates-io]
-storj = { git = "https://github.com/BradKollmyer/storj-uplink.git", rev = "e635fba246c15e6bee7fe9e1a4c31207a6e5915b" }
+storj = { path = "../storj-native-iterations/crates/storj" }
 
 # Allows quick RPM file generation, if "cargo-generate-rpm" is installed:
 #  cargo build --release; cargo generate-rpm
