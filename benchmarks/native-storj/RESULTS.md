@@ -119,3 +119,23 @@ Maximum RSS was2,884,304,896 bytes (peak memory footprint2,328,873,744).
 All100 files/1,849,631,128 bytes verified; restore and runner exited0,
 no warnings. This repeat is slower than the53.99s first run, showing real
 network variance, but remains substantially faster than five connections.
+
+### Test08: twenty-connection repeat
+
+`fixed-c20-b.TBAjD1`: wall32.61s, CPU15.19s user +5.33s system.
+All100 files/1,849,631,128 bytes verified; restore and runner exited0,
+no warnings. This confirms the35.56s first run. All eight completed subset
+restores matched the reference byte for byte.
+
+| Scheduler | Connections | First run | Repeat | Mean wall |
+|---|---:|---:|---:|---:|
+| Resettable hedge timer | 5 | 160.92s | 154.03s | 157.48s |
+| Fixed hedge cadence | 5 | 100.88s | 100.31s | 100.60s |
+| Fixed hedge cadence | 10 | 53.99s | 61.10s | 57.55s |
+| Fixed hedge cadence | 20 | 35.56s | 32.61s | 34.09s |
+
+At equal concurrency, the scheduler change is1.57× faster in these samples.
+Combined with20 connections it is4.62× faster than the original five-connection
+baseline. These are different comparisons: the latter includes concurrency
+tuning, not just a code improvement. Select20 for full-day confirmation, while
+leaving the shipped default of5 unchanged.
