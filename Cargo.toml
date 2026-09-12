@@ -209,6 +209,16 @@ lto = true
 debug-assertions = false
 codegen-units = 1
 
+# Use the local rustic_core tree for integration builds instead of the git pin.
+[patch."https://github.com/BradKollmyer/rustic_core"]
+rustic_core = { path = "../rustic_core/crates/core" }
+rustic_backend = { path = "../rustic_core/crates/backend" }
+
+# Native Storj path pin for fleet builds (private repo, mounted at /storj).
+# Latest committed code: 1.1.0 (a30a672).
+[patch.crates-io]
+storj = { path = "../../storj/storj-uplink/crates/storj" }
+
 # Allows quick RPM file generation, if "cargo-generate-rpm" is installed:
 #  cargo build --release; cargo generate-rpm
 # will result in a file like target/generate-rpm/rustic-rs-0.6.1-1.x86_64.rpm

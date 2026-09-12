@@ -11,3 +11,6 @@ coverage/*lcov
 /tests/generated/*.toml
 /tests/generated/*.log
 /tests/generated/test-restore
+
+# Local secrets
+.env
