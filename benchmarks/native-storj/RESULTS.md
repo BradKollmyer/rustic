@@ -78,3 +78,15 @@ All100 files/1,849,631,128 bytes verified; restore and runner exited0,
 no warnings. No sampling or concurrent compilation. This is close to the
 profiled baseline160.92s; the candidate's100.88s remains1.53× faster than
 this unprofiled repeat. Next: repeat the candidate before concurrency tuning.
+
+### Test04: fixed-cadence repeat, five connections
+
+`fixed-c5-b.OMUT6K`: wall100.31s, CPU14.92s user +5.20s system.
+All100 files/1,849,631,128 bytes verified; restore and runner exited0,
+no warnings. No sampling or concurrent compilation.
+
+Interleaved wall times: baseline160.92s, candidate100.88s, baseline154.03s,
+candidate100.31s. The two candidate timings differ by only0.57s. Mean baseline
+157.48s versus candidate100.60s is a1.57× speedup (36.1% less time), with
+the caveat that the first baseline included brief profiling. Next experiment
+changes only the candidate's connection count from5 to10.
