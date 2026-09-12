@@ -17,6 +17,11 @@ access-file = "/root/storj.grant"
 # access-command = "cat /root/storj.grant"
 # retry = "default"
 # transport = "noise" # tcp, quic, auto, or noise. Default: noise (restic/Go uplink)
+# connections = "5" # Concurrent object reads/writes; each fans out to storage nodes.
+# message-timeout = "20" # Seconds per network read/write, including stalled peers.
+# download-hedge-delay = "1" # Seconds without a completed piece before trying another node; 0 disables.
+# Downloads start k+1 pieces and cap speculative spares at about 20% of k
+# (normally up to 35 pieces for k=29). Slow pieces continue until k succeed.
 
 # Applied at `rustic init`. 60 MiB sits near Storj's 64 MiB segment size.
 [init]

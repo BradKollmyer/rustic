@@ -6191,7 +6191,7 @@ dependencies = [
  "rhai",
  "rstest",
  "rustic_backend",
- "rustic_core 0.13.0",
+ "rustic_core 0.13.0 (git+https://github.com/BradKollmyer/rustic_core?rev=acd990eb4204a7d9456e3c95d7b7f963af9aad97)",
  "rustic_testing",
  "scopeguard",
  "self_update",
@@ -6211,6 +6211,7 @@ dependencies = [
 [[package]]
 name = "rustic_backend"
 version = "0.7.0"
+source = "git+https://github.com/BradKollmyer/rustic_core?rev=acd990eb4204a7d9456e3c95d7b7f963af9aad97#acd990eb4204a7d9456e3c95d7b7f963af9aad97"
 dependencies = [
  "aho-corasick",
  "backon",
@@ -6229,7 +6230,7 @@ dependencies = [
  "rand 0.10.2",
  "rayon",
  "reqwest",
- "rustic_core 0.13.0",
+ "rustic_core 0.13.0 (git+https://github.com/BradKollmyer/rustic_core?rev=acd990eb4204a7d9456e3c95d7b7f963af9aad97)",
  "semver",
  "serde",
  "storj",
@@ -6246,63 +6247,6 @@ name = "rustic_cdc"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbcebf2228827bc4b61cb54dfd84cf43aacf06ca2dfe4c014b136a0e32b876e2"
-
-[[package]]
-name = "rustic_core"
-version = "0.13.0"
-dependencies = [
- "aes256ctr_poly1305aes",
- "backon",
- "binrw",
- "bytes",
- "bytesize",
- "cached 2.0.2",
- "cachedir",
- "clap",
- "conflate",
- "crossbeam-channel",
- "derive_more",
- "derive_setters",
- "dirs",
- "displaydoc",
- "dunce",
- "ecow",
- "enum-map",
- "enumset",
- "filetime",
- "gethostname",
- "hex",
- "ignore",
- "integer-sqrt",
- "itertools 0.15.0",
- "jiff",
- "lockable",
- "log",
- "memchr",
- "nix 0.31.3",
- "pariter",
- "path-dedot",
- "quick_cache",
- "rand 0.10.2",
- "rayon",
- "runtime-format",
- "rustc-hash",
- "rustic_cdc",
- "scrypt 0.12.0",
- "serde",
- "serde-aux",
- "serde_derive",
- "serde_json",
- "serde_with",
- "sha2 0.11.0",
- "shell-words",
- "smallvec",
- "strum",
- "thiserror 2.0.20",
- "walkdir",
- "xattr",
- "zstd 0.13.3",
-]
 
 [[package]]
 name = "rustic_core"
@@ -6341,6 +6285,64 @@ dependencies = [
  "rand 0.10.2",
  "rayon",
  "runtime-format",
+ "rustic_cdc",
+ "scrypt 0.12.0",
+ "serde",
+ "serde-aux",
+ "serde_derive",
+ "serde_json",
+ "serde_with",
+ "sha2 0.11.0",
+ "shell-words",
+ "smallvec",
+ "strum",
+ "thiserror 2.0.20",
+ "walkdir",
+ "xattr",
+ "zstd 0.13.3",
+]
+
+[[package]]
+name = "rustic_core"
+version = "0.13.0"
+source = "git+https://github.com/BradKollmyer/rustic_core?rev=acd990eb4204a7d9456e3c95d7b7f963af9aad97#acd990eb4204a7d9456e3c95d7b7f963af9aad97"
+dependencies = [
+ "aes256ctr_poly1305aes",
+ "backon",
+ "binrw",
+ "bytes",
+ "bytesize",
+ "cached 2.0.2",
+ "cachedir",
+ "clap",
+ "conflate",
+ "crossbeam-channel",
+ "derive_more",
+ "derive_setters",
+ "dirs",
+ "displaydoc",
+ "dunce",
+ "ecow",
+ "enum-map",
+ "enumset",
+ "filetime",
+ "gethostname",
+ "hex",
+ "ignore",
+ "integer-sqrt",
+ "itertools 0.15.0",
+ "jiff",
+ "lockable",
+ "log",
+ "memchr",
+ "nix 0.31.3",
+ "pariter",
+ "path-dedot",
+ "quick_cache",
+ "rand 0.10.2",
+ "rayon",
+ "runtime-format",
+ "rustc-hash",
  "rustic_cdc",
  "scrypt 0.12.0",
  "serde",
@@ -7107,6 +7109,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "storj"
 version = "1.1.0"
+source = "git+https://github.com/BradKollmyer/storj-uplink.git?rev=e635fba246c15e6bee7fe9e1a4c31207a6e5915b#e635fba246c15e6bee7fe9e1a4c31207a6e5915b"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -7126,6 +7129,7 @@ dependencies = [
 [[package]]
 name = "storj-access"
 version = "1.1.0"
+source = "git+https://github.com/BradKollmyer/storj-uplink.git?rev=e635fba246c15e6bee7fe9e1a4c31207a6e5915b#e635fba246c15e6bee7fe9e1a4c31207a6e5915b"
 dependencies = [
  "bs58",
  "getrandom 0.4.3",
@@ -7139,6 +7143,7 @@ dependencies = [
 [[package]]
 name = "storj-ec"
 version = "1.1.0"
+source = "git+https://github.com/BradKollmyer/storj-uplink.git?rev=e635fba246c15e6bee7fe9e1a4c31207a6e5915b#e635fba246c15e6bee7fe9e1a4c31207a6e5915b"
 dependencies = [
  "thiserror 2.0.20",
 ]
@@ -7146,6 +7151,7 @@ dependencies = [
 [[package]]
 name = "storj-encryption"
 version = "1.1.0"
+source = "git+https://github.com/BradKollmyer/storj-uplink.git?rev=e635fba246c15e6bee7fe9e1a4c31207a6e5915b#e635fba246c15e6bee7fe9e1a4c31207a6e5915b"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -7159,6 +7165,7 @@ dependencies = [
 [[package]]
 name = "storj-proto"
 version = "1.1.0"
+source = "git+https://github.com/BradKollmyer/storj-uplink.git?rev=e635fba246c15e6bee7fe9e1a4c31207a6e5915b#e635fba246c15e6bee7fe9e1a4c31207a6e5915b"
 dependencies = [
  "prost",
  "prost-types",
@@ -7169,6 +7176,7 @@ dependencies = [
 [[package]]
 name = "storj-rpc"
 version = "1.1.0"
+source = "git+https://github.com/BradKollmyer/storj-uplink.git?rev=e635fba246c15e6bee7fe9e1a4c31207a6e5915b#e635fba246c15e6bee7fe9e1a4c31207a6e5915b"
 dependencies = [
  "bs58",
  "futures-util",
@@ -7190,6 +7198,7 @@ dependencies = [
 [[package]]
 name = "storj-uplink"
 version = "1.1.0"
+source = "git+https://github.com/BradKollmyer/storj-uplink.git?rev=e635fba246c15e6bee7fe9e1a4c31207a6e5915b#e635fba246c15e6bee7fe9e1a4c31207a6e5915b"
 dependencies = [
  "blake3",
  "ed25519-dalek",

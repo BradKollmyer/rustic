@@ -63,8 +63,8 @@ rustdoc-args = ["--document-private-items", "--generate-link-to-definition"]
 [dependencies]
 abscissa_core = { version = "0.9.0", default-features = false, features = ["application"] }
 # fork/dev integration builds — do not open PRs from this branch
-rustic_backend = { git = "https://github.com/BradKollmyer/rustic_core", branch = "dev", features = ["cli"] }
-rustic_core = { git = "https://github.com/BradKollmyer/rustic_core", branch = "dev", features = ["cli"] }
+rustic_backend = { git = "https://github.com/BradKollmyer/rustic_core", rev = "acd990eb4204a7d9456e3c95d7b7f963af9aad97", features = ["cli"] }
+rustic_core = { git = "https://github.com/BradKollmyer/rustic_core", rev = "acd990eb4204a7d9456e3c95d7b7f963af9aad97", features = ["cli"] }
 
 # allocators
 jemallocator-global = { version = "0.3.2", optional = true }
@@ -209,15 +209,9 @@ lto = true
 debug-assertions = false
 codegen-units = 1
 
-# Use the local rustic_core tree for integration builds instead of the git pin.
-[patch."https://github.com/BradKollmyer/rustic_core"]
-rustic_core = { path = "../rustic_core/crates/core" }
-rustic_backend = { path = "../rustic_core/crates/backend" }
-
-# Native Storj path pin for fleet builds (private repo, mounted at /storj).
-# Latest committed code: 1.1.0 (a30a672).
+# Pin bounded speculative downloads until a crates.io release includes them.
 [patch.crates-io]
-storj = { path = "../../storj/storj-uplink/crates/storj" }
+storj = { git = "https://github.com/BradKollmyer/storj-uplink.git", rev = "e635fba246c15e6bee7fe9e1a4c31207a6e5915b" }
 
 # Allows quick RPM file generation, if "cargo-generate-rpm" is installed:
 #  cargo build --release; cargo generate-rpm
