@@ -111,3 +111,11 @@ benchmark setting, not a change to the backend default of5.
 restore and runner exited0, no warnings. The same binary at20 connections
 is1.52× faster than Test05 at10. Repeat10 then20 before selecting the
 full-day confirmation setting; do not infer a general default from one Mac.
+Maximum RSS was2,884,304,896 bytes (peak memory footprint2,328,873,744).
+
+### Test07: ten-connection repeat
+
+`fixed-c10-b.JzJy2g`: wall61.10s, CPU15.89s user +5.63s system.
+All100 files/1,849,631,128 bytes verified; restore and runner exited0,
+no warnings. This repeat is slower than the53.99s first run, showing real
+network variance, but remains substantially faster than five connections.
