@@ -85,6 +85,7 @@ throttle = "10kB,250MB" # limit and burst per second; only opendal backends; bur
 # https://opendal.apache.org/docs/rust/opendal/services/index.html
 # access-file = "/root/storj.grant" # Only storj; or access / access-command / STORJ_ACCESS
 # user-agent = "rustic" # Only storj; Default: "rustic"
+# transport = "noise" # Only storj; tcp, quic, auto, or noise. Default: noise (restic/Go uplink)
 
 # Additional repository options for the hot part - depending on backend. These can be only set in the config file or
 # using env variables.

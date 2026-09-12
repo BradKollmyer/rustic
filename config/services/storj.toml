@@ -16,6 +16,7 @@ password = "password"
 access-file = "/root/storj.grant"
 # access-command = "cat /root/storj.grant"
 # retry = "default"
+# transport = "noise" # tcp, quic, auto, or noise. Default: noise (restic/Go uplink)
 
 # Applied at `rustic init`. 60 MiB sits near Storj's 64 MiB segment size.
 [init]
