@@ -90,3 +90,16 @@ candidate100.31s. The two candidate timings differ by only0.57s. Mean baseline
 157.48s versus candidate100.60s is a1.57× speedup (36.1% less time), with
 the caveat that the first baseline included brief profiling. Next experiment
 changes only the candidate's connection count from5 to10.
+
+### Test05: fixed cadence, ten connections
+
+`fixed-c10-a.ROYpw2`: wall53.99s, CPU15.28s user +5.64s system,
+32.67MiB/s payload throughput. All100 files/1,849,631,128 bytes verified;
+restore and runner exited0, no warnings. Maximum RSS1,951,154,176 bytes,
+versus1,521,319,936 bytes for Test04. Ten connections improved throughput
+substantially without CPU saturation. The SDK pool includes idle+active
+connections in its cap (1100 for this setting); no pool changes were made.
+
+Next test uses the existing restore ceiling of20 connections, still with
+the8192 descriptor limit and the same bounded scheduler. This is an explicit
+benchmark setting, not a change to the backend default of5.
