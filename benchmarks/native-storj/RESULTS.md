@@ -31,4 +31,25 @@ The runner sets the limit internally so timed measurements cannot omit it.
 
 ## Results
 
-Pending fresh baseline.
+### Test01: fresh baseline, five connections
+
+`baseline-c5-a.jmMqpa`: wall160.92s, CPU15.05s user +5.03s system,
+10.96MiB/s payload throughput. All100 files/1,849,631,128 bytes verified
+with `cmp`; restore and runner exited0. No restore warnings.
+
+This run included a10-second `sample` (5ms interval) and ten1Hz `nettop`
+snapshots. The stripped binary limits symbol detail, but top-of-stack samples
+were dominated by condition-variable waits (102,045), semaphore waits (3,650)
+and `kevent` (1,703), not active CPU work. Profiling overhead is included;
+later comparisons will include an unprofiled baseline repeat.
+
+Artifacts and preserved baseline binary are under
+`/Users/bradk/repos/rustic/restore/native-iterations.RsMRDY/`.
+
+### Candidate: fixed hedge launch cadence
+
+For these60MiB packs, multi-segment prefetch is unlikely to help: they fit
+within one64MiB Storj segment. The current scheduler recreates its1s sleep
+after every completion, so sub-second trickling successes postpone spares.
+Test a persistent launch deadline while retaining the same35-attempt production
+speculative cap, immediate failure replacements and cancellation safeguards.

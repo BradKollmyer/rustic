@@ -17,6 +17,9 @@ run_dir=$(mktemp -d "$STORJ_BENCH_ROOT/$label.XXXXXX")
 printf 'Run directory: %s\n' "$run_dir"
 ulimit -n 8192
 "$binary" --version > "$run_dir/version.txt"
+shasum -a 256 "$binary" > "$run_dir/binary-sha256.txt"
+printf 'connections=%s\nglob=%s\nsnapshot=59bff332\n' \
+  "$STORJ_BENCH_CONNECTIONS" "$pattern" > "$run_dir/parameters.txt"
 date -u '+%Y-%m-%dT%H:%M:%SZ' > "$run_dir/start.txt"
 /usr/bin/time -l -p -o "$run_dir/time.txt" \
   "$binary" -P "$script_dir/profile" --profile-substitute-env \
@@ -52,4 +55,5 @@ for restored in "$run_dir/2026-08-31"/*; do
 done
 [[ $count -gt 0 && $actual_count -eq $count ]]
 printf 'verified_files=%s\nverified_bytes=%s\n' "$count" "$bytes" >> "$run_dir/result.txt"
-sed -n '1,20p' "$run_dir/time.txt" "$run_dir/result.txt"
+sed -n '1,3p' "$run_dir/time.txt"
+sed -n '1,20p' "$run_dir/result.txt"
