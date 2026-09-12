@@ -142,9 +142,11 @@ filter-last = "5" # Default: not set
 # Backup options: These options are used for all sources when calling the backup command.
 # They can be overwritten by source-specific options (see below) or command line options.
 [backup]
-# Opt-in parallel pack uploads, capped at five workers and the backend connection limit.
+# Opt-in parallel pack uploads. Worker count is backup-connections, else the backend connection limit, else 5.
 parallel-uploads = false
-# Completed pack buffers only; this is not a total memory limit. Requires parallel-uploads to take effect.
+# Override parallel backup upload workers. Implies parallel-uploads. Capped by the backend connection limit when set.
+# backup-connections = 10
+# Completed pack buffers only; this is not a total memory limit. Requires parallel-uploads or backup-connections to take effect.
 backup-upload-buffer = "1 GiB"
 label = "label" # Default: not set
 tags = ["tag1", "tag2"]

@@ -73,7 +73,8 @@ fn test_parallel_backup_options_reach_core() -> TestResult<()> {
     rustic_runner(&temp_dir)?
         .args([
             "backup",
-            "--parallel-uploads",
+            "--backup-connections",
+            "2",
             "--backup-upload-buffer",
             "1GiB",
         ])

@@ -77,10 +77,15 @@ pub struct BackupCmd {
     #[merge(skip)]
     name: Option<String>,
 
-    /// Upload backup packs in parallel, using up to five workers and the backend connection limit.
+    /// Upload backup packs in parallel. Default worker count is the backend connection limit, or 5.
     #[clap(long)]
     #[merge(strategy=conflate::bool::overwrite_false)]
     parallel_uploads: bool,
+
+    /// Parallel backup upload workers. Implies --parallel-uploads. Capped by the backend connection limit when set.
+    #[clap(long, value_name = "N")]
+    #[merge(strategy=conflate::option::overwrite_none)]
+    backup_connections: Option<usize>,
 
     /// Limit completed parallel backup pack buffers (default: 1 GiB). Small buffers reduce concurrency.
     #[clap(long, value_name = "SIZE")]
@@ -483,6 +488,7 @@ impl BackupCmd {
 
         let backup_opts = BackupOptions::default()
             .parallel_uploads(self.parallel_uploads)
+            .backup_connections(self.backup_connections)
             .backup_upload_buffer(self.backup_upload_buffer)
             .stdin_filename(self.stdin_filename.unwrap_or_else(|| "stdin".to_string()))
             .stdin_command(self.stdin_command)
@@ -833,27 +839,47 @@ mod parallel_upload_tests {
         let opts = BackupCmd::try_parse_from([
             "backup",
             "--parallel-uploads",
+            "--backup-connections",
+            "10",
             "--backup-upload-buffer",
             "1GiB",
             "/source",
         ])
         .unwrap();
         assert!(opts.parallel_uploads);
+        assert_eq!(opts.backup_connections, Some(10));
         assert_eq!(opts.backup_upload_buffer, Some(ByteSize::gib(1)));
         let defaults = BackupCmd::try_parse_from(["backup", "/source"]).unwrap();
         assert!(!defaults.parallel_uploads);
+        assert_eq!(defaults.backup_connections, None);
         assert_eq!(defaults.backup_upload_buffer, None);
+        let implied =
+            BackupCmd::try_parse_from(["backup", "--backup-connections", "8", "/source"]).unwrap();
+        assert_eq!(implied.backup_connections, Some(8));
+        assert!(!implied.parallel_uploads);
     }
 
     #[test]
     fn merges_config_parallel_uploads_with_cli_buffer() {
-        let config: BackupCmd =
-            toml::from_str("parallel-uploads = true\nbackup-upload-buffer = '1GiB'").unwrap();
+        let config: BackupCmd = toml::from_str(
+            "parallel-uploads = true\nbackup-connections = 12\nbackup-upload-buffer = '1GiB'",
+        )
+        .unwrap();
         let mut opts =
             BackupCmd::try_parse_from(["backup", "--backup-upload-buffer", "512MiB", "/source"])
                 .unwrap();
         opts.merge(config);
         assert!(opts.parallel_uploads);
+        assert_eq!(opts.backup_connections, Some(12));
         assert_eq!(opts.backup_upload_buffer, Some(ByteSize::mib(512)));
+    }
+
+    #[test]
+    fn cli_backup_connections_overrides_config() {
+        let config: BackupCmd = toml::from_str("backup-connections = 12").unwrap();
+        let mut opts =
+            BackupCmd::try_parse_from(["backup", "--backup-connections", "3", "/source"]).unwrap();
+        opts.merge(config);
+        assert_eq!(opts.backup_connections, Some(3));
     }
 }
