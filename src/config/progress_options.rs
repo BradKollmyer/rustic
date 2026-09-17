@@ -22,8 +22,8 @@ use rustic_core::{Progress, ProgressBars, ProgressType, RusticProgress, format_u
 
 /// Returns the global `MultiProgress` instance used by all interactive progress bars.
 ///
-/// Must be shared with `indicatif_log_bridge::LogWrapper` so that log output
-/// suspends progress bars before printing.
+/// Console logging prints above these bars (see `logging.rs`) so a warning
+/// cannot freeze them.
 pub fn multi_progress() -> &'static MultiProgress {
     static MP: OnceLock<MultiProgress> = OnceLock::new();
     MP.get_or_init(|| {

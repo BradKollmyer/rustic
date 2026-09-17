@@ -14,7 +14,7 @@ use log4rs::{
         file::FileAppender,
     },
     config::{Appender, Config, Logger, Root},
-    encode::pattern::PatternEncoder,
+    encode::{Encode, pattern::PatternEncoder, writer::simple::SimpleWriter},
     filter::threshold::ThresholdFilter,
 };
 use serde::{Deserialize, Serialize};
@@ -177,9 +177,12 @@ impl LoggingOptions {
 
         let stdout = ConsoleAppender::builder()
             .target(Target::Stderr)
-            .encoder(Box::new(PatternEncoder::new("{h([{l}])} {m}{n}")))
+            .encoder(Box::new(PatternEncoder::new(CONSOLE_PATTERN)))
             .build();
-        let stdout = PbPauseAppender(stdout);
+        let stdout = PbPauseAppender {
+            console: stdout,
+            encoder: PatternEncoder::new(CONSOLE_PATTERN),
+        };
 
         let mut root_builder = Root::builder().appender("stdout");
         let mut config_builder = Config::builder().appender(
@@ -223,20 +226,42 @@ impl LoggingOptions {
     }
 }
 
+const CONSOLE_PATTERN: &str = "{h([{l}])} {m}{n}";
+
+fn format_console_record(encoder: &PatternEncoder, record: &log::Record<'_>) -> String {
+    let mut buf = Vec::new();
+    if encoder
+        .encode(&mut SimpleWriter(&mut buf), record)
+        .is_ok()
+    {
+        String::from_utf8_lossy(&buf).trim_end().to_string()
+    } else {
+        format!("[{}] {}", record.level(), record.args())
+    }
+}
+
 /// Console appender that coordinates with progress bars and the TUI.
 ///
 /// While a [`TuiLogCapture`] guard is active, records are buffered instead of
-/// being written to the terminal. Otherwise the indicatif progress bar is
-/// suspended for the duration of the write.
+/// being written to the terminal. Otherwise log lines are printed above
+/// active progress bars (`suspend`+clear can freeze the bar after a warning).
 #[derive(Debug)]
-struct PbPauseAppender(ConsoleAppender);
+struct PbPauseAppender {
+    console: ConsoleAppender,
+    encoder: PatternEncoder,
+}
 
 impl log4rs::append::Append for PbPauseAppender {
     fn append(&self, record: &log::Record<'_>) -> Result<()> {
         if capture_console_log(record) {
             return Ok(());
         }
-        multi_progress().suspend(|| self.0.append(record))
+        if multi_progress().is_hidden() {
+            return self.console.append(record);
+        }
+        let msg = format_console_record(&self.encoder, record);
+        multi_progress().println(msg)?;
+        Ok(())
     }
 
     fn flush(&self) {
@@ -245,7 +270,7 @@ impl log4rs::append::Append for PbPauseAppender {
         // if log4rs changes this behavior, we might need to add a suspend here.
         // But that's not necessary right now, so we just call flush directly
         // to avoid unnecessary suspends.
-        self.0.flush();
+        self.console.flush();
     }
 }
 
@@ -384,5 +409,22 @@ mod tests {
             String::from_utf8(out).unwrap(),
             "[2 older log messages omitted]\n[WARN] retry\n"
         );
+    }
+
+    #[test]
+    fn format_console_record_includes_level_and_message() {
+        let encoder = PatternEncoder::new(CONSOLE_PATTERN);
+        let formatted = format_console_record(
+            &encoder,
+            &log::Record::builder()
+                .args(format_args!(
+                    "ignoring error /var/mnt/photos/__pycache__: No such file or directory"
+                ))
+                .level(log::Level::Warn)
+                .target("rustic_core")
+                .build(),
+        );
+        assert!(formatted.contains("WARN"), "{formatted}");
+        assert!(formatted.contains("__pycache__"), "{formatted}");
     }
 }
