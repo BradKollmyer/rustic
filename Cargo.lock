@@ -6191,7 +6191,7 @@ dependencies = [
  "rhai",
  "rstest",
  "rustic_backend",
- "rustic_core 0.13.0 (git+https://github.com/BradKollmyer/rustic_core?rev=acd990eb4204a7d9456e3c95d7b7f963af9aad97)",
+ "rustic_core 0.13.0 (git+https://github.com/BradKollmyer/rustic_core?rev=a37714a04cccc4c561fb9e4f697558c6d5b9f67b)",
  "rustic_testing",
  "scopeguard",
  "self_update",
@@ -6211,7 +6211,7 @@ dependencies = [
 [[package]]
 name = "rustic_backend"
 version = "0.7.0"
-source = "git+https://github.com/BradKollmyer/rustic_core?rev=acd990eb4204a7d9456e3c95d7b7f963af9aad97#acd990eb4204a7d9456e3c95d7b7f963af9aad97"
+source = "git+https://github.com/BradKollmyer/rustic_core?rev=a37714a04cccc4c561fb9e4f697558c6d5b9f67b#a37714a04cccc4c561fb9e4f697558c6d5b9f67b"
 dependencies = [
  "aho-corasick",
  "backon",
@@ -6230,7 +6230,7 @@ dependencies = [
  "rand 0.10.2",
  "rayon",
  "reqwest",
- "rustic_core 0.13.0 (git+https://github.com/BradKollmyer/rustic_core?rev=acd990eb4204a7d9456e3c95d7b7f963af9aad97)",
+ "rustic_core 0.13.0 (git+https://github.com/BradKollmyer/rustic_core?rev=a37714a04cccc4c561fb9e4f697558c6d5b9f67b)",
  "semver",
  "serde",
  "storj",
@@ -6305,7 +6305,7 @@ dependencies = [
 [[package]]
 name = "rustic_core"
 version = "0.13.0"
-source = "git+https://github.com/BradKollmyer/rustic_core?rev=acd990eb4204a7d9456e3c95d7b7f963af9aad97#acd990eb4204a7d9456e3c95d7b7f963af9aad97"
+source = "git+https://github.com/BradKollmyer/rustic_core?rev=a37714a04cccc4c561fb9e4f697558c6d5b9f67b#a37714a04cccc4c561fb9e4f697558c6d5b9f67b"
 dependencies = [
  "aes256ctr_poly1305aes",
  "backon",
