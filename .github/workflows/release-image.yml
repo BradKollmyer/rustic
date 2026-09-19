@@ -4,6 +4,7 @@ on: [release]
 
 jobs:
   docker:
+    if: ${{ github.repository_owner == 'rustic-rs' }}
     runs-on: ubuntu-latest
     steps:
     - name: Set up Docker Buildx

@@ -15,7 +15,6 @@ defaults:
 
 permissions:
   contents: write
-  discussions: write
 
 env:
   BINARY_NAME: rustic
@@ -23,7 +22,6 @@ env:
 
 jobs:
   publish:
-    if: ${{ github.repository_owner == 'rustic-rs' }}
     name: Publishing ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}
     strategy:
@@ -113,18 +111,16 @@ jobs:
           binary-name: ${{ env.BINARY_NAME }}
           package-secondary-name: ${{ matrix.job.target}}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          gpg-release-private-key: ${{ secrets.GPG_RELEASE_PRIVATE_KEY }}
-          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
-          rsign-release-private-key: ${{ secrets.RSIGN_RELEASE_PRIVATE_KEY }}
-          rsign-passphrase: ${{ secrets.RSIGN_PASSPHRASE }}
           github-ref: ${{ github.ref }}
-          sign-release: true
+          # Fork has no rustic-rs GPG/minisign keys; still hash the tarballs.
+          sign-release: false
           hash-release: true
           use-project-version: true
           use-tag-version: true # IMPORTANT: this is being used to make sure the tag that is built is in the archive filename, so automation can download the correct version
 
   create-release:
     name: Creating release with artifacts
+    if: startsWith(github.ref, 'refs/tags/')
     needs: publish
     runs-on: ubuntu-latest
     steps:
@@ -140,8 +136,7 @@ jobs:
       - name: Creating Release
         uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2
         with:
-          discussion_category_name: "Announcements"
-          draft: true
+          draft: false
           body_path: ${{ github.workspace }}/CHANGELOG.md
           fail_on_unmatched_files: true
           files: |
@@ -150,7 +145,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   result:
-    if: ${{ github.repository_owner == 'rustic-rs' }}
     name: Result (Release CD)
     runs-on: ubuntu-latest
     needs:
