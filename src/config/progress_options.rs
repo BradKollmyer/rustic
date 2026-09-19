@@ -52,6 +52,127 @@ pub(crate) fn log_above_progress_bars() -> bool {
     !multi_progress().is_hidden() && has_live_progress_bars()
 }
 
+/// Visible width of stderr, for sizing progress templates so they do not wrap.
+fn stderr_width() -> usize {
+    ioctl_stderr_cols()
+        .or_else(|| {
+            std::env::var("COLUMNS")
+                .ok()
+                .and_then(|cols| cols.parse().ok())
+        })
+        .filter(|&cols| cols >= 40)
+        .unwrap_or(80)
+}
+
+#[cfg(unix)]
+fn ioctl_stderr_cols() -> Option<usize> {
+    let mut size = libc::winsize {
+        ws_row: 0,
+        ws_col: 0,
+        ws_xpixel: 0,
+        ws_ypixel: 0,
+    };
+    // Safety: `TIOCGWINSZ` writes a `winsize` for this fd.
+    let ok = unsafe { libc::ioctl(libc::STDERR_FILENO, libc::TIOCGWINSZ, &mut size) == 0 };
+    (ok && size.ws_col >= 40).then_some(usize::from(size.ws_col))
+}
+
+#[cfg(not(unix))]
+fn ioctl_stderr_cols() -> Option<usize> {
+    None
+}
+
+const ELAPSED_WIDTH: usize = 11;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BytesStats {
+    Bare,
+    WithTotal,
+    WithEta,
+}
+
+impl BytesStats {
+    fn width(self) -> usize {
+        match self {
+            Self::Bare => 1 + 10 + 1 + 12,
+            Self::WithTotal => 1 + 10 + 1 + 10 + 1 + 12,
+            Self::WithEta => 1 + 10 + 1 + 10 + 1 + 12 + 13,
+        }
+    }
+
+    #[allow(clippy::literal_string_with_formatting_args)]
+    fn suffix(self) -> &'static str {
+        match self {
+            Self::Bare => " {bytes:>10} {bytes_per_sec:<12}",
+            Self::WithTotal => " {bytes:>10}/{total_bytes:<10} {bytes_per_sec:<12}",
+            Self::WithEta => " {bytes:>10}/{total_bytes:<10} {bytes_per_sec:<12} (ETA {my_eta})",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct BytesLayout {
+    prefix: usize,
+    bar: usize,
+    stats: BytesStats,
+}
+
+impl BytesLayout {
+    fn total_width(self) -> usize {
+        ELAPSED_WIDTH + self.prefix + 1 + self.bar + self.stats.width()
+    }
+
+    fn template(self) -> String {
+        format!(
+            "[{{elapsed_precise}}] {{prefix:{}}} {{bar:{}.cyan/blue}}{}",
+            self.prefix,
+            self.bar,
+            self.stats.suffix()
+        )
+    }
+}
+
+fn bytes_layout(width: usize, with_length: bool) -> BytesLayout {
+    let budget = width.max(40).saturating_sub(1);
+    let try_fit = |prefix: usize, stats: BytesStats, min_bar: usize| -> Option<BytesLayout> {
+        let used = ELAPSED_WIDTH + prefix + 1 + stats.width();
+        let bar = budget.saturating_sub(used);
+        (bar >= min_bar).then_some(BytesLayout {
+            prefix,
+            bar: bar.min(40),
+            stats,
+        })
+    };
+
+    let layout = if with_length {
+        try_fit(14, BytesStats::WithEta, 10)
+            .or_else(|| try_fit(14, BytesStats::WithTotal, 8))
+            .or_else(|| try_fit(10, BytesStats::WithTotal, 6))
+            .or_else(|| try_fit(10, BytesStats::Bare, 4))
+            .unwrap_or(BytesLayout {
+                prefix: 8,
+                bar: 4,
+                stats: BytesStats::Bare,
+            })
+    } else {
+        try_fit(14, BytesStats::Bare, 8)
+            .or_else(|| try_fit(10, BytesStats::Bare, 4))
+            .unwrap_or(BytesLayout {
+                prefix: 8,
+                bar: 4,
+                stats: BytesStats::Bare,
+            })
+    };
+    debug_assert!(layout.total_width() <= width.max(40));
+    layout
+}
+
+fn prefix_width(width: usize, extra: usize) -> usize {
+    let budget = width.max(40).saturating_sub(1);
+    let leftover = budget.saturating_sub(ELAPSED_WIDTH + extra);
+    leftover.clamp(8, 14)
+}
+
 mod constants {
     use std::time::Duration;
 
@@ -223,39 +344,55 @@ impl InteractiveProgress {
         }
     }
 
-    #[allow(clippy::literal_string_with_formatting_args)]
     fn initial_style(kind: ProgressType) -> ProgressStyle {
-        let template = match kind {
-            ProgressType::Spinner => "[{elapsed_precise}] {prefix:30} {spinner}",
-            ProgressType::Counter => "[{elapsed_precise}] {prefix:30} {bar:40.cyan/blue} {pos:>10}",
-            ProgressType::Bytes => {
-                "[{elapsed_precise}] {prefix:30} {bar:40.cyan/blue} {bytes:>10}            {bytes_per_sec:12}"
-            }
-            ProgressType::Status => "[{elapsed_precise}] {prefix:30} {msg}",
-        };
-        ProgressStyle::default_bar().template(template).unwrap()
+        Self::style_for(kind, false)
+    }
+
+    fn style_with_length(kind: ProgressType) -> ProgressStyle {
+        Self::style_for(kind, true)
     }
 
     #[allow(clippy::literal_string_with_formatting_args)]
-    fn style_with_length(kind: ProgressType) -> ProgressStyle {
-        match kind {
-            ProgressType::Spinner | ProgressType::Status => Self::initial_style(kind),
-            ProgressType::Counter => ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] {prefix:30} {bar:40.cyan/blue} {pos:>10}/{len:10}")
-                .unwrap(),
-            ProgressType::Bytes => ProgressStyle::default_bar()
-                .with_key("my_eta", |s: &ProgressState, w: &mut dyn Write| {
-                    let _ = match (s.pos(), s.len()) {
-                        (pos, Some(len)) if pos != 0 && len > pos => {
-                            let eta_secs = s.elapsed().as_secs() * (len - pos) / pos;
-                            write!(w, "{:#}", HumanDuration(Duration::from_secs(eta_secs)))
-                        }
-                        _ => write!(w, "-"),
-                    };
-                })
-                .template("[{elapsed_precise}] {prefix:30} {bar:40.cyan/blue} {bytes:>10}/{total_bytes:10} {bytes_per_sec:12} (ETA {my_eta})")
-                .unwrap(),
+    fn style_for(kind: ProgressType, with_length: bool) -> ProgressStyle {
+        let width = stderr_width();
+        let template = match kind {
+            ProgressType::Spinner => {
+                let prefix = prefix_width(width, 2);
+                format!("[{{elapsed_precise}}] {{prefix:{prefix}}} {{spinner}}")
+            }
+            ProgressType::Counter => {
+                let layout = bytes_layout(width, with_length);
+                if with_length {
+                    format!(
+                        "[{{elapsed_precise}}] {{prefix:{}}} {{bar:{}.cyan/blue}} {{pos:>10}}/{{len:10}}",
+                        layout.prefix, layout.bar
+                    )
+                } else {
+                    format!(
+                        "[{{elapsed_precise}}] {{prefix:{}}} {{bar:{}.cyan/blue}} {{pos:>10}}",
+                        layout.prefix, layout.bar
+                    )
+                }
+            }
+            ProgressType::Bytes => bytes_layout(width, with_length).template(),
+            ProgressType::Status => {
+                let prefix = prefix_width(width, 24);
+                format!("[{{elapsed_precise}}] {{prefix:{prefix}}} {{msg}}")
+            }
+        };
+        let mut style = ProgressStyle::default_bar();
+        if matches!(kind, ProgressType::Bytes) && with_length {
+            style = style.with_key("my_eta", |s: &ProgressState, w: &mut dyn Write| {
+                let _ = match (s.pos(), s.len()) {
+                    (pos, Some(len)) if pos != 0 && len > pos => {
+                        let eta_secs = s.elapsed().as_secs() * (len - pos) / pos;
+                        write!(w, "{:#}", HumanDuration(Duration::from_secs(eta_secs)))
+                    }
+                    _ => write!(w, "-"),
+                };
+            });
         }
+        style.template(&template).unwrap()
     }
 }
 
@@ -629,6 +766,7 @@ impl RusticProgress for JsonProgress {
         _ = writeln!(stderr);
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -770,5 +908,36 @@ mod tests {
             !log_above_progress_bars(),
             "Files/snapshot summary must not use MultiProgress::println after the bar finishes"
         );
+    }
+
+    #[test]
+    fn bytes_layout_fits_typical_consoles() {
+        for width in [80, 100, 120, 160] {
+            for with_length in [false, true] {
+                let layout = bytes_layout(width, with_length);
+                assert!(
+                    layout.total_width() <= width,
+                    "width={width} with_length={with_length}: {} > {width} ({layout:?})",
+                    layout.total_width()
+                );
+                assert!(layout.bar >= 4, "bar too small: {layout:?}");
+            }
+        }
+        assert!(bytes_layout(120, true).bar > bytes_layout(80, true).bar);
+        assert_eq!(bytes_layout(80, true).stats, BytesStats::WithTotal);
+        assert_eq!(bytes_layout(120, true).stats, BytesStats::WithEta);
+    }
+
+    #[test]
+    fn bytes_template_is_valid_indicatif_style() {
+        for width in [80, 120] {
+            let template = bytes_layout(width, true).template();
+            _ = ProgressStyle::default_bar()
+                .with_key("my_eta", |_: &ProgressState, w: &mut dyn Write| {
+                    let _ = write!(w, "-");
+                })
+                .template(&template)
+                .expect(&template);
+        }
     }
 }
