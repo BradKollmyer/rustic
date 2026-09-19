@@ -20,7 +20,7 @@ use log4rs::{
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 
-use crate::config::progress_options::multi_progress;
+use crate::config::progress_options::{log_above_progress_bars, multi_progress};
 
 /// Maximum console log records held while the TUI owns the terminal.
 const MAX_CAPTURED_CONSOLE_LOGS: usize = 256;
@@ -230,10 +230,7 @@ const CONSOLE_PATTERN: &str = "{h([{l}])} {m}{n}";
 
 fn format_console_record(encoder: &PatternEncoder, record: &log::Record<'_>) -> String {
     let mut buf = Vec::new();
-    if encoder
-        .encode(&mut SimpleWriter(&mut buf), record)
-        .is_ok()
-    {
+    if encoder.encode(&mut SimpleWriter(&mut buf), record).is_ok() {
         String::from_utf8_lossy(&buf).trim_end().to_string()
     } else {
         format!("[{}] {}", record.level(), record.args())
@@ -243,8 +240,9 @@ fn format_console_record(encoder: &PatternEncoder, record: &log::Record<'_>) -> 
 /// Console appender that coordinates with progress bars and the TUI.
 ///
 /// While a [`TuiLogCapture`] guard is active, records are buffered instead of
-/// being written to the terminal. Otherwise log lines are printed above
-/// active progress bars (`suspend`+clear can freeze the bar after a warning).
+/// being written to the terminal. Live bars: print above them (`suspend`+clear
+/// can freeze a bar). After the last bar finishes, use the console appender
+/// so the backup summary is a real newline-terminated line.
 #[derive(Debug)]
 struct PbPauseAppender {
     console: ConsoleAppender,
@@ -256,7 +254,7 @@ impl log4rs::append::Append for PbPauseAppender {
         if capture_console_log(record) {
             return Ok(());
         }
-        if multi_progress().is_hidden() {
+        if !log_above_progress_bars() {
             return self.console.append(record);
         }
         let msg = format_console_record(&self.encoder, record);

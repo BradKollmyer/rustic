@@ -100,7 +100,9 @@ fn test_backup_and_check_passes() -> TestResult<()> {
             .arg(backup.path())
             .assert()
             .success()
-            .stderr(predicate::str::contains("successfully saved."));
+            .stderr(predicate::str::contains("Files:"))
+            .stderr(predicate::str::contains("successfully saved."))
+            .stderr(predicate::str::contains("backup of"));
     }
 
     {
@@ -119,8 +121,10 @@ fn test_backup_and_check_passes() -> TestResult<()> {
             .arg(backup.path())
             .assert()
             .success()
+            .stderr(predicate::str::contains("Files:"))
             .stderr(predicate::str::contains("Added to the repo: 0 B"))
-            .stderr(predicate::str::contains("successfully saved."));
+            .stderr(predicate::str::contains("successfully saved."))
+            .stderr(predicate::str::contains("backup of"));
     }
 
     {
@@ -347,7 +351,9 @@ fn test_backup_and_restore_passes() -> TestResult<()> {
             .arg("/")
             .assert()
             .success()
-            .stderr(predicate::str::contains("successfully saved."));
+            .stderr(predicate::str::contains("Files:"))
+            .stderr(predicate::str::contains("successfully saved."))
+            .stderr(predicate::str::contains("backup of"));
     }
     {
         // Run `restore`
@@ -380,4 +386,25 @@ fn test_backup_and_restore_passes() -> TestResult<()> {
     // TODO: compare dump output with fixture
 
     Ok(())
+}
+
+/// Treat raw PTY bytes like a log collector: split on `\n`, keep only the
+/// last `\r`-overwritten segment of each line.
+fn log_capture_view(raw: &[u8]) -> String {
+    String::from_utf8_lossy(raw)
+        .split('\n')
+        .map(|line| line.rsplit('\r').next().unwrap_or(line))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn log_capture_view_drops_cr_overwritten_summary() {
+    let raw = b"[INFO] Files:       1 new, 0 changed, 0 unchanged\r[00:00:00] backing up...        0 B\n[INFO] backup of /mnt/photos/ done.\n";
+    let view = log_capture_view(raw);
+    assert!(
+        !view.contains("Files:"),
+        "CR overwrite should hide the Files line from a log capture: {view}"
+    );
+    assert!(view.contains("backup of /mnt/photos/ done."));
 }

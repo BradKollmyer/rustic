@@ -3,7 +3,7 @@
 use std::{fmt::Write, io::Write as _, time::Duration};
 
 use std::io::IsTerminal;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
@@ -22,8 +22,8 @@ use rustic_core::{Progress, ProgressBars, ProgressType, RusticProgress, format_u
 
 /// Returns the global `MultiProgress` instance used by all interactive progress bars.
 ///
-/// Console logging prints above these bars (see `logging.rs`) so a warning
-/// cannot freeze them.
+/// Live bars: logs print above them (see `logging.rs`). After the last bar
+/// finishes, logs use the console appender so the backup summary is a real line.
 pub fn multi_progress() -> &'static MultiProgress {
     static MP: OnceLock<MultiProgress> = OnceLock::new();
     MP.get_or_init(|| {
@@ -31,6 +31,25 @@ pub fn multi_progress() -> &'static MultiProgress {
         mp.set_move_cursor(true);
         mp
     })
+}
+
+static LIVE_INTERACTIVE_BARS: AtomicUsize = AtomicUsize::new(0);
+
+/// True while at least one interactive progress bar is on screen.
+///
+/// `MultiProgress::println` pads to the terminal width and moves the cursor
+/// instead of writing newlines, so a PTY log capture can drop the backup
+/// summary. Write ordinary console lines when this is false.
+pub(crate) fn has_live_progress_bars() -> bool {
+    LIVE_INTERACTIVE_BARS.load(Ordering::Relaxed) > 0
+}
+
+/// Console logs go through `MultiProgress::println` only while a bar is on screen.
+///
+/// After the last bar finishes this is false even if stderr is a TTY, so the
+/// backup Files/snapshot summary is a real newline-terminated line.
+pub(crate) fn log_above_progress_bars() -> bool {
+    !multi_progress().is_hidden() && has_live_progress_bars()
 }
 
 mod constants {
@@ -135,12 +154,13 @@ impl ProgressBars for ProgressOptions {
 
 // ================ Interactive ================
 /// Wrapper around `indicatif::ProgressBar` for interactive terminal usage
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct InteractiveProgress {
     bar: ProgressBar,
     kind: ProgressType,
     tick_interval: Duration,
-    shown: Arc<AtomicBool>,
+    shown: AtomicBool,
+    live: AtomicBool,
 }
 
 impl InteractiveProgress {
@@ -152,18 +172,42 @@ impl InteractiveProgress {
         if shown {
             let bar = multi_progress().add(bar);
             bar.enable_steady_tick(tick_interval);
-            return Self {
+            let this = Self {
                 bar,
                 kind,
                 tick_interval,
-                shown: Arc::new(AtomicBool::new(true)),
+                shown: AtomicBool::new(true),
+                live: AtomicBool::new(false),
             };
+            this.register_live();
+            return this;
         }
         Self {
             bar,
             kind,
             tick_interval,
-            shown: Arc::new(AtomicBool::new(false)),
+            shown: AtomicBool::new(false),
+            live: AtomicBool::new(false),
+        }
+    }
+
+    fn register_live(&self) {
+        if self
+            .live
+            .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+        {
+            _ = LIVE_INTERACTIVE_BARS.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    fn unregister_live(&self) {
+        if self
+            .live
+            .compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+        {
+            _ = LIVE_INTERACTIVE_BARS.fetch_sub(1, Ordering::Relaxed);
         }
     }
 
@@ -175,6 +219,7 @@ impl InteractiveProgress {
         {
             let _ = multi_progress().add(self.bar.clone());
             self.bar.enable_steady_tick(self.tick_interval);
+            self.register_live();
         }
     }
 
@@ -238,7 +283,8 @@ impl RusticProgress for InteractiveProgress {
         if matches!(self.kind, ProgressType::Status) && !self.shown.load(Ordering::Relaxed) {
             return;
         }
-        self.bar.finish_with_message("done");
+        self.bar.finish_and_clear();
+        self.unregister_live();
     }
 
     fn set_message(&self, msg: &str) {
@@ -246,6 +292,12 @@ impl RusticProgress for InteractiveProgress {
         if matches!(self.kind, ProgressType::Status) {
             self.ensure_shown();
         }
+    }
+}
+
+impl Drop for InteractiveProgress {
+    fn drop(&mut self) {
+        self.unregister_live();
     }
 }
 
@@ -575,5 +627,148 @@ impl RusticProgress for JsonProgress {
         let mut stderr = std::io::stderr().lock();
         _ = serde_json::to_writer(&mut stderr, &error);
         _ = writeln!(stderr);
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Mutex, MutexGuard, PoisonError};
+
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn lock_tests() -> MutexGuard<'static, ()> {
+        TEST_LOCK.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn live_count() -> usize {
+        LIVE_INTERACTIVE_BARS.load(Ordering::Relaxed)
+    }
+
+    #[test]
+    fn live_bar_count_tracks_show_and_finish() {
+        let _lock = lock_tests();
+        let before = live_count();
+        let p = InteractiveProgress::new(
+            "backing up...",
+            ProgressType::Bytes,
+            Duration::from_millis(100),
+        );
+        assert!(has_live_progress_bars());
+        assert_eq!(live_count(), before + 1);
+        p.finish();
+        assert_eq!(live_count(), before);
+        p.finish();
+        assert_eq!(live_count(), before);
+    }
+
+    #[test]
+    fn live_bar_count_drops_without_finish() {
+        let _lock = lock_tests();
+        let before = live_count();
+        {
+            let _p = InteractiveProgress::new(
+                "backing up...",
+                ProgressType::Bytes,
+                Duration::from_millis(100),
+            );
+            assert_eq!(live_count(), before + 1);
+        }
+        assert_eq!(live_count(), before);
+    }
+
+    #[test]
+    fn hidden_status_bar_is_not_live_until_shown() {
+        let _lock = lock_tests();
+        let before = live_count();
+        let p = InteractiveProgress::new(
+            "uploading",
+            ProgressType::Status,
+            Duration::from_millis(100),
+        );
+        assert_eq!(live_count(), before);
+        p.set_message("1 new  0 changed  0 B added");
+        assert_eq!(live_count(), before + 1);
+        p.finish();
+        assert_eq!(live_count(), before);
+    }
+
+    /// Draw target that is never hidden, unlike a piped stderr in `cargo test`.
+    #[derive(Debug)]
+    struct VisibleTerm;
+
+    impl indicatif::TermLike for VisibleTerm {
+        fn width(&self) -> u16 {
+            80
+        }
+
+        fn move_cursor_up(&self, _: usize) -> std::io::Result<()> {
+            Ok(())
+        }
+
+        fn move_cursor_down(&self, _: usize) -> std::io::Result<()> {
+            Ok(())
+        }
+
+        fn move_cursor_right(&self, _: usize) -> std::io::Result<()> {
+            Ok(())
+        }
+
+        fn move_cursor_left(&self, _: usize) -> std::io::Result<()> {
+            Ok(())
+        }
+
+        fn write_line(&self, _: &str) -> std::io::Result<()> {
+            Ok(())
+        }
+
+        fn write_str(&self, _: &str) -> std::io::Result<()> {
+            Ok(())
+        }
+
+        fn clear_line(&self) -> std::io::Result<()> {
+            Ok(())
+        }
+
+        fn flush(&self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    struct RestoreStderrTarget;
+
+    impl Drop for RestoreStderrTarget {
+        fn drop(&mut self) {
+            multi_progress().set_draw_target(indicatif::ProgressDrawTarget::stderr());
+        }
+    }
+
+    #[test]
+    fn backup_summary_does_not_use_progress_println_after_finish() {
+        let _lock = lock_tests();
+        let _restore = RestoreStderrTarget;
+        multi_progress().set_draw_target(indicatif::ProgressDrawTarget::term_like(Box::new(
+            VisibleTerm,
+        )));
+
+        assert!(
+            !multi_progress().is_hidden(),
+            "test requires a visible MultiProgress"
+        );
+
+        let p = InteractiveProgress::new(
+            "backing up...",
+            ProgressType::Bytes,
+            Duration::from_millis(100),
+        );
+        assert!(
+            log_above_progress_bars(),
+            "live bars on a TTY must print above the bar"
+        );
+
+        p.finish();
+        assert!(
+            !log_above_progress_bars(),
+            "Files/snapshot summary must not use MultiProgress::println after the bar finishes"
+        );
     }
 }
