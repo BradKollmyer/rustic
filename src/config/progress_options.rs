@@ -27,9 +27,10 @@ use rustic_core::{Progress, ProgressBars, ProgressType, RusticProgress, format_u
 pub fn multi_progress() -> &'static MultiProgress {
     static MP: OnceLock<MultiProgress> = OnceLock::new();
     MP.get_or_init(|| {
-        let mp = MultiProgress::new();
-        mp.set_move_cursor(true);
-        mp
+        // Overwrite-in-place (`move_cursor`) pads to the claimed tty width and
+        // does not clear to end-of-line, so a shorter log line leaves the tail
+        // of the status bar (`GiB added`) on the Files/Dirs summary.
+        MultiProgress::new()
     })
 }
 
@@ -50,6 +51,17 @@ pub(crate) fn has_live_progress_bars() -> bool {
 /// backup Files/snapshot summary is a real newline-terminated line.
 pub(crate) fn log_above_progress_bars() -> bool {
     !multi_progress().is_hidden() && has_live_progress_bars()
+}
+
+/// Park the cursor on a clean line after the last bar is gone.
+///
+/// `finish_and_clear` does not write a newline, so the next `info!` would start
+/// on the leftover bar row and leave the tail of a longer status line visible.
+fn end_progress_display() {
+    let _ = multi_progress().clear();
+    let mut stderr = std::io::stderr().lock();
+    let _ = stderr.write_all(b"\r\x1b[K\n");
+    let _ = stderr.flush();
 }
 
 /// Visible width of stderr, for sizing progress templates so they do not wrap.
@@ -328,7 +340,10 @@ impl InteractiveProgress {
             .compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed)
             .is_ok()
         {
-            _ = LIVE_INTERACTIVE_BARS.fetch_sub(1, Ordering::Relaxed);
+            let prev = LIVE_INTERACTIVE_BARS.fetch_sub(1, Ordering::Relaxed);
+            if prev == 1 {
+                end_progress_display();
+            }
         }
     }
 
