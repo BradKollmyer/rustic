@@ -8,7 +8,10 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use bytesize::ByteSize;
-use indicatif::{HumanDuration, MultiProgress, ProgressBar, ProgressState, ProgressStyle};
+use indicatif::{
+    HumanDuration, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressState, ProgressStyle,
+    TermLike,
+};
 
 use clap::Parser;
 use conflate::Merge;
@@ -27,11 +30,19 @@ use rustic_core::{Progress, ProgressBars, ProgressType, RusticProgress, format_u
 pub fn multi_progress() -> &'static MultiProgress {
     static MP: OnceLock<MultiProgress> = OnceLock::new();
     MP.get_or_init(|| {
-        // Overwrite-in-place (`move_cursor`) pads to the claimed tty width and
-        // does not clear to end-of-line, so a shorter log line leaves the tail
-        // of the status bar (`GiB added`) on the Files/Dirs summary.
-        MultiProgress::new()
+        MultiProgress::with_draw_target(ProgressDrawTarget::term_like_with_hz(
+            Box::new(StackingTerm::default()),
+            20,
+        ))
     })
+}
+
+#[cfg(test)]
+fn install_progress_draw_target() {
+    multi_progress().set_draw_target(ProgressDrawTarget::term_like_with_hz(
+        Box::new(StackingTerm::default()),
+        20,
+    ));
 }
 
 static LIVE_INTERACTIVE_BARS: AtomicUsize = AtomicUsize::new(0);
@@ -71,14 +82,17 @@ pub(crate) fn take_progress_break() {
 
 /// Visible width of stderr, for sizing progress templates so they do not wrap.
 fn stderr_width() -> usize {
-    ioctl_stderr_cols()
-        .or_else(|| {
-            std::env::var("COLUMNS")
-                .ok()
-                .and_then(|cols| cols.parse().ok())
-        })
-        .filter(|&cols| cols >= 40)
-        .unwrap_or(80)
+    let ioctl = ioctl_stderr_cols();
+    let columns = std::env::var("COLUMNS")
+        .ok()
+        .and_then(|cols| cols.parse().ok())
+        .filter(|&cols| cols >= 40);
+    match (ioctl, columns) {
+        (Some(ioctl), Some(columns)) => ioctl.min(columns),
+        (Some(ioctl), None) => ioctl,
+        (None, Some(columns)) => columns,
+        (None, None) => 80,
+    }
 }
 
 #[cfg(unix)]
@@ -97,6 +111,153 @@ fn ioctl_stderr_cols() -> Option<usize> {
 #[cfg(not(unix))]
 fn ioctl_stderr_cols() -> Option<usize> {
     None
+}
+
+/// Draw target that inserts a real newline when a bar fills the console width.
+///
+/// Indicatif pads with spaces and relies on terminal autowrap; without a `\n`,
+/// the next bar or log line stays on the same row.
+#[derive(Debug, Default)]
+struct StackingTerm {
+    col: Mutex<usize>,
+}
+
+/// Write `s` to `out`, wrapping at `width` visible columns. ANSI CSI sequences
+/// are passed through and do not count toward the column.
+fn write_wrapping(
+    s: &str,
+    col: &mut usize,
+    width: usize,
+    mut out: impl FnMut(&str) -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    let width = width.max(1);
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\x1b' {
+            let start = i;
+            i += 1;
+            if i < bytes.len() && bytes[i] == b'[' {
+                i += 1;
+                while i < bytes.len() && !bytes[i].is_ascii_alphabetic() {
+                    i += 1;
+                }
+                if i < bytes.len() {
+                    i += 1;
+                }
+            }
+            out(std::str::from_utf8(&bytes[start..i]).unwrap_or(""))?;
+            continue;
+        }
+        if bytes[i] == b'\n' {
+            out("\n")?;
+            *col = 0;
+            i += 1;
+            continue;
+        }
+        if bytes[i] == b'\r' {
+            out("\r")?;
+            *col = 0;
+            i += 1;
+            continue;
+        }
+        let ch_len = match bytes[i] {
+            n if n < 0x80 => 1,
+            n if n < 0xe0 => 2,
+            n if n < 0xf0 => 3,
+            _ => 4,
+        };
+        let end = (i + ch_len).min(bytes.len());
+        if *col >= width {
+            out("\n")?;
+            *col = 0;
+        }
+        out(std::str::from_utf8(&bytes[i..end]).unwrap_or(""))?;
+        *col += 1;
+        // Newline as soon as the line is full so the next bar cannot share the row
+        // even if the terminal does not autowrap.
+        if *col >= width {
+            out("\n")?;
+            *col = 0;
+        }
+        i = end;
+    }
+    Ok(())
+}
+
+impl TermLike for StackingTerm {
+    fn width(&self) -> u16 {
+        stderr_width().try_into().unwrap_or(80)
+    }
+
+    fn height(&self) -> u16 {
+        24
+    }
+
+    fn move_cursor_up(&self, n: usize) -> std::io::Result<()> {
+        if n > 0 {
+            write!(std::io::stderr(), "\x1b[{n}A")?;
+        }
+        *self
+            .col
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = 0;
+        Ok(())
+    }
+
+    fn move_cursor_down(&self, n: usize) -> std::io::Result<()> {
+        if n > 0 {
+            write!(std::io::stderr(), "\x1b[{n}B")?;
+        }
+        Ok(())
+    }
+
+    fn move_cursor_right(&self, n: usize) -> std::io::Result<()> {
+        if n > 0 {
+            write!(std::io::stderr(), "\x1b[{n}C")?;
+        }
+        Ok(())
+    }
+
+    fn move_cursor_left(&self, n: usize) -> std::io::Result<()> {
+        if n > 0 {
+            write!(std::io::stderr(), "\x1b[{n}D")?;
+        }
+        Ok(())
+    }
+
+    fn write_line(&self, s: &str) -> std::io::Result<()> {
+        self.write_str(s)?;
+        self.write_str("\n")
+    }
+
+    fn write_str(&self, s: &str) -> std::io::Result<()> {
+        let width = usize::from(self.width());
+        let mut col = self
+            .col
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        write_wrapping(s, &mut col, width, |chunk| {
+            let mut stderr = std::io::stderr().lock();
+            stderr.write_all(chunk.as_bytes())
+        })
+    }
+
+    fn clear_line(&self) -> std::io::Result<()> {
+        {
+            let mut stderr = std::io::stderr().lock();
+            stderr.write_all(b"\r\x1b[K")?;
+        }
+        *self
+            .col
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = 0;
+        Ok(())
+    }
+
+    fn flush(&self) -> std::io::Result<()> {
+        std::io::stderr().flush()
+    }
 }
 
 const ELAPSED_WIDTH: usize = 11;
@@ -886,7 +1047,7 @@ mod tests {
     #[derive(Debug)]
     struct VisibleTerm;
 
-    impl indicatif::TermLike for VisibleTerm {
+    impl TermLike for VisibleTerm {
         fn width(&self) -> u16 {
             80
         }
@@ -928,7 +1089,7 @@ mod tests {
 
     impl Drop for RestoreStderrTarget {
         fn drop(&mut self) {
-            multi_progress().set_draw_target(indicatif::ProgressDrawTarget::stderr());
+            install_progress_draw_target();
         }
     }
 
@@ -936,9 +1097,7 @@ mod tests {
     fn backup_summary_does_not_use_progress_println_after_finish() {
         let _lock = lock_tests();
         let _restore = RestoreStderrTarget;
-        multi_progress().set_draw_target(indicatif::ProgressDrawTarget::term_like(Box::new(
-            VisibleTerm,
-        )));
+        multi_progress().set_draw_target(ProgressDrawTarget::term_like(Box::new(VisibleTerm)));
 
         assert!(
             !multi_progress().is_hidden(),
@@ -978,6 +1137,39 @@ mod tests {
         assert!(bytes_layout(120, true).bar > bytes_layout(80, true).bar);
         assert_eq!(bytes_layout(80, true).stats, BytesStats::WithTotal);
         assert_eq!(bytes_layout(120, true).stats, BytesStats::WithEta);
+    }
+
+    #[test]
+    fn write_wrapping_inserts_newline_between_padded_bars() {
+        let mut col = 0;
+        let mut out = String::new();
+        write_wrapping(
+            "reading-index...............................0",
+            &mut col,
+            80,
+            |s| {
+                out.push_str(s);
+                Ok(())
+            },
+        )
+        .unwrap();
+        write_wrapping(&" ".repeat(80 - col), &mut col, 80, |s| {
+            out.push_str(s);
+            Ok(())
+        })
+        .unwrap();
+        assert!(
+            out.ends_with('\n'),
+            "padding to width must end the line: {out:?}"
+        );
+        write_wrapping("getting-snapshot", &mut col, 80, |s| {
+            out.push_str(s);
+            Ok(())
+        })
+        .unwrap();
+        let first = out.split('\n').next().unwrap();
+        assert!(!first.contains("getting-snapshot"));
+        assert!(out.contains("getting-snapshot"));
     }
 
     #[test]
