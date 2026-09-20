@@ -10,7 +10,6 @@ use std::time::Instant;
 use bytesize::ByteSize;
 use indicatif::{
     HumanDuration, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressState, ProgressStyle,
-    TermLike,
 };
 
 use clap::Parser;
@@ -29,24 +28,18 @@ use rustic_core::{Progress, ProgressBars, ProgressType, RusticProgress, format_u
 /// finishes, logs use the console appender so the backup summary is a real line.
 pub fn multi_progress() -> &'static MultiProgress {
     static MP: OnceLock<MultiProgress> = OnceLock::new();
-    MP.get_or_init(|| {
-        MultiProgress::with_draw_target(ProgressDrawTarget::term_like_with_hz(
-            Box::new(StackingTerm::default()),
-            20,
-        ))
-    })
-}
-
-#[cfg(test)]
-fn install_progress_draw_target() {
-    multi_progress().set_draw_target(ProgressDrawTarget::term_like_with_hz(
-        Box::new(StackingTerm::default()),
-        20,
-    ));
+    MP.get_or_init(MultiProgress::new)
 }
 
 static LIVE_INTERACTIVE_BARS: AtomicUsize = AtomicUsize::new(0);
 static NEED_PROGRESS_BREAK: AtomicBool = AtomicBool::new(false);
+static PRIMARY_BAR: Mutex<Option<ProgressBar>> = Mutex::new(None);
+
+fn primary_bar_lock() -> std::sync::MutexGuard<'static, Option<ProgressBar>> {
+    PRIMARY_BAR
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
 
 /// True while at least one interactive progress bar is on screen.
 ///
@@ -67,9 +60,8 @@ pub(crate) fn log_above_progress_bars() -> bool {
 
 /// Clear leftover bar cells before the next console log.
 ///
-/// Called from the log appender when bars have just gone away, not at every
-/// bar finish — otherwise index/parent counters flash a blank line between them.
-/// `\r` + erase-line parks the cursor at column 0 without inserting a blank row.
+/// Used after index/snapshot counters (`finish_and_clear`). The backup graph
+/// is parked with a newline in `finish()` and must not be erased here.
 pub(crate) fn take_progress_break() {
     if !NEED_PROGRESS_BREAK.swap(false, Ordering::Relaxed) {
         return;
@@ -113,153 +105,6 @@ fn ioctl_stderr_cols() -> Option<usize> {
     None
 }
 
-/// Draw target that inserts a real newline when a bar fills the console width.
-///
-/// Indicatif pads with spaces and relies on terminal autowrap; without a `\n`,
-/// the next bar or log line stays on the same row.
-#[derive(Debug, Default)]
-struct StackingTerm {
-    col: Mutex<usize>,
-}
-
-/// Write `s` to `out`, wrapping at `width` visible columns. ANSI CSI sequences
-/// are passed through and do not count toward the column.
-fn write_wrapping(
-    s: &str,
-    col: &mut usize,
-    width: usize,
-    mut out: impl FnMut(&str) -> std::io::Result<()>,
-) -> std::io::Result<()> {
-    let width = width.max(1);
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'\x1b' {
-            let start = i;
-            i += 1;
-            if i < bytes.len() && bytes[i] == b'[' {
-                i += 1;
-                while i < bytes.len() && !bytes[i].is_ascii_alphabetic() {
-                    i += 1;
-                }
-                if i < bytes.len() {
-                    i += 1;
-                }
-            }
-            out(std::str::from_utf8(&bytes[start..i]).unwrap_or(""))?;
-            continue;
-        }
-        if bytes[i] == b'\n' {
-            out("\n")?;
-            *col = 0;
-            i += 1;
-            continue;
-        }
-        if bytes[i] == b'\r' {
-            out("\r")?;
-            *col = 0;
-            i += 1;
-            continue;
-        }
-        let ch_len = match bytes[i] {
-            n if n < 0x80 => 1,
-            n if n < 0xe0 => 2,
-            n if n < 0xf0 => 3,
-            _ => 4,
-        };
-        let end = (i + ch_len).min(bytes.len());
-        if *col >= width {
-            out("\n")?;
-            *col = 0;
-        }
-        out(std::str::from_utf8(&bytes[i..end]).unwrap_or(""))?;
-        *col += 1;
-        // Newline as soon as the line is full so the next bar cannot share the row
-        // even if the terminal does not autowrap.
-        if *col >= width {
-            out("\n")?;
-            *col = 0;
-        }
-        i = end;
-    }
-    Ok(())
-}
-
-impl TermLike for StackingTerm {
-    fn width(&self) -> u16 {
-        stderr_width().try_into().unwrap_or(80)
-    }
-
-    fn height(&self) -> u16 {
-        24
-    }
-
-    fn move_cursor_up(&self, n: usize) -> std::io::Result<()> {
-        if n > 0 {
-            write!(std::io::stderr(), "\x1b[{n}A")?;
-        }
-        *self
-            .col
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = 0;
-        Ok(())
-    }
-
-    fn move_cursor_down(&self, n: usize) -> std::io::Result<()> {
-        if n > 0 {
-            write!(std::io::stderr(), "\x1b[{n}B")?;
-        }
-        Ok(())
-    }
-
-    fn move_cursor_right(&self, n: usize) -> std::io::Result<()> {
-        if n > 0 {
-            write!(std::io::stderr(), "\x1b[{n}C")?;
-        }
-        Ok(())
-    }
-
-    fn move_cursor_left(&self, n: usize) -> std::io::Result<()> {
-        if n > 0 {
-            write!(std::io::stderr(), "\x1b[{n}D")?;
-        }
-        Ok(())
-    }
-
-    fn write_line(&self, s: &str) -> std::io::Result<()> {
-        self.write_str(s)?;
-        self.write_str("\n")
-    }
-
-    fn write_str(&self, s: &str) -> std::io::Result<()> {
-        let width = usize::from(self.width());
-        let mut col = self
-            .col
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        write_wrapping(s, &mut col, width, |chunk| {
-            let mut stderr = std::io::stderr().lock();
-            stderr.write_all(chunk.as_bytes())
-        })
-    }
-
-    fn clear_line(&self) -> std::io::Result<()> {
-        {
-            let mut stderr = std::io::stderr().lock();
-            stderr.write_all(b"\r\x1b[K")?;
-        }
-        *self
-            .col
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = 0;
-        Ok(())
-    }
-
-    fn flush(&self) -> std::io::Result<()> {
-        std::io::stderr().flush()
-    }
-}
-
 const ELAPSED_WIDTH: usize = 11;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -283,7 +128,8 @@ impl BytesStats {
         match self {
             Self::Bare => " {bytes:>10} {bytes_per_sec:<12}",
             Self::WithTotal => " {bytes:>10}/{total_bytes:<10} {bytes_per_sec:<12}",
-            Self::WithEta => " {bytes:>10}/{total_bytes:<10} {bytes_per_sec:<12} (ETA {my_eta})",
+            // `{my_eta}` writes ` (ETA 1.2m)` while running, and nothing when done.
+            Self::WithEta => " {bytes:>10}/{total_bytes:<10} {bytes_per_sec:<12}{my_eta}",
         }
     }
 }
@@ -293,20 +139,30 @@ struct BytesLayout {
     prefix: usize,
     bar: usize,
     stats: BytesStats,
+    msg: bool,
 }
 
 impl BytesLayout {
     fn total_width(self) -> usize {
-        ELAPSED_WIDTH + self.prefix + 1 + self.bar + self.stats.width()
+        ELAPSED_WIDTH
+            + self.prefix
+            + 1
+            + self.bar
+            + self.stats.width()
+            + if self.msg { 33 } else { 0 }
     }
 
     fn template(self) -> String {
-        format!(
+        let mut template = format!(
             "[{{elapsed_precise}}] {{prefix:{}}} {{bar:{}.cyan/blue}}{}",
             self.prefix,
             self.bar,
             self.stats.suffix()
-        )
+        );
+        if self.msg {
+            template.push_str(" {msg}");
+        }
+        template
     }
 }
 
@@ -319,6 +175,7 @@ fn bytes_layout(width: usize, with_length: bool) -> BytesLayout {
             prefix,
             bar: bar.min(40),
             stats,
+            msg: false,
         })
     };
 
@@ -331,6 +188,7 @@ fn bytes_layout(width: usize, with_length: bool) -> BytesLayout {
                 prefix: 8,
                 bar: 4,
                 stats: BytesStats::Bare,
+                msg: false,
             })
     } else {
         try_fit(14, BytesStats::Bare, 8)
@@ -339,8 +197,14 @@ fn bytes_layout(width: usize, with_length: bool) -> BytesLayout {
                 prefix: 8,
                 bar: 4,
                 stats: BytesStats::Bare,
+                msg: false,
             })
     };
+    let leftover = budget.saturating_sub(layout.total_width());
+    let mut layout = layout;
+    if leftover >= 33 {
+        layout.msg = true;
+    }
     debug_assert!(layout.total_width() <= width.max(40));
     layout
 }
@@ -465,10 +329,11 @@ pub struct InteractiveProgress {
 impl InteractiveProgress {
     fn new(prefix: &str, kind: ProgressType, tick_interval: Duration) -> Self {
         let style = Self::initial_style(kind);
-        let bar = ProgressBar::new(0).with_style(style);
+        // Hidden until added to MultiProgress. `ProgressBar::new()` draws to
+        // stderr immediately, which left a blank/upload row the cursor then skipped.
+        let bar =
+            ProgressBar::with_draw_target(Some(0), ProgressDrawTarget::hidden()).with_style(style);
         bar.set_prefix(prefix.to_string());
-        // Empty prefix is used for index/parent scans; a 40-column bar with no
-        // label just flashes and makes the start of backup look like stutter.
         let shown = !matches!(kind, ProgressType::Status) && !prefix.is_empty();
         if shown {
             let bar = multi_progress().add(bar);
@@ -481,6 +346,7 @@ impl InteractiveProgress {
                 live: AtomicBool::new(false),
             };
             this.register_live();
+            this.remember_primary();
             return this;
         }
         Self {
@@ -489,6 +355,18 @@ impl InteractiveProgress {
             tick_interval,
             shown: AtomicBool::new(false),
             live: AtomicBool::new(false),
+        }
+    }
+
+    fn remember_primary(&self) {
+        if matches!(self.kind, ProgressType::Bytes) {
+            *primary_bar_lock() = Some(self.bar.clone());
+        }
+    }
+
+    fn forget_primary(&self) {
+        if matches!(self.kind, ProgressType::Bytes) {
+            *primary_bar_lock() = None;
         }
     }
 
@@ -517,6 +395,9 @@ impl InteractiveProgress {
     }
 
     fn ensure_shown(&self) {
+        if matches!(self.kind, ProgressType::Status) {
+            return;
+        }
         if self
             .shown
             .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
@@ -525,6 +406,7 @@ impl InteractiveProgress {
             let _ = multi_progress().add(self.bar.clone());
             self.bar.enable_steady_tick(self.tick_interval);
             self.register_live();
+            self.remember_primary();
         }
     }
 
@@ -570,9 +452,13 @@ impl InteractiveProgress {
                 let _ = match (s.pos(), s.len()) {
                     (pos, Some(len)) if pos != 0 && len > pos => {
                         let eta_secs = s.elapsed().as_secs() * (len - pos) / pos;
-                        write!(w, "{:#}", HumanDuration(Duration::from_secs(eta_secs)))
+                        write!(
+                            w,
+                            " (ETA {:#})",
+                            HumanDuration(Duration::from_secs(eta_secs))
+                        )
                     }
-                    _ => write!(w, "-"),
+                    _ => Ok(()),
                 };
             });
         }
@@ -607,20 +493,42 @@ impl RusticProgress for InteractiveProgress {
         if matches!(self.kind, ProgressType::Status) && !self.shown.load(Ordering::Relaxed) {
             return;
         }
+        if !self.shown.load(Ordering::Relaxed) {
+            self.unregister_live();
+            return;
+        }
+        if matches!(self.kind, ProgressType::Bytes) {
+            // Leave the completed graph in scrollback, then start a new line
+            // so Files/snapshot info! is not glued onto it.
+            self.bar.disable_steady_tick();
+            self.bar.finish();
+            let mut stderr = std::io::stderr().lock();
+            let _ = stderr.write_all(b"\n");
+            let _ = stderr.flush();
+            self.forget_primary();
+            self.unregister_live();
+            NEED_PROGRESS_BREAK.store(false, Ordering::Relaxed);
+            return;
+        }
         self.bar.finish_and_clear();
+        self.forget_primary();
         self.unregister_live();
     }
 
     fn set_message(&self, msg: &str) {
-        self.bar.set_message(msg.to_string());
         if matches!(self.kind, ProgressType::Status) {
-            self.ensure_shown();
+            if let Some(bar) = primary_bar_lock().as_ref() {
+                bar.set_message(msg.to_string());
+            }
+            return;
         }
+        self.bar.set_message(msg.to_string());
     }
 }
 
 impl Drop for InteractiveProgress {
     fn drop(&mut self) {
+        self.forget_primary();
         self.unregister_live();
     }
 }
@@ -1016,8 +924,8 @@ mod tests {
         let _lock = lock_tests();
         NEED_PROGRESS_BREAK.store(false, Ordering::Relaxed);
         let p = InteractiveProgress::new(
-            "backing up...",
-            ProgressType::Bytes,
+            "reading index...",
+            ProgressType::Counter,
             Duration::from_millis(100),
         );
         assert!(!NEED_PROGRESS_BREAK.load(Ordering::Relaxed));
@@ -1028,18 +936,40 @@ mod tests {
     }
 
     #[test]
-    fn hidden_status_bar_is_not_live_until_shown() {
+    fn bytes_finish_keeps_graph_and_skips_erase() {
+        let _lock = lock_tests();
+        NEED_PROGRESS_BREAK.store(false, Ordering::Relaxed);
+        let p = InteractiveProgress::new(
+            "backing up...",
+            ProgressType::Bytes,
+            Duration::from_millis(100),
+        );
+        p.finish();
+        assert!(
+            !NEED_PROGRESS_BREAK.load(Ordering::Relaxed),
+            "erasing after finish would wipe the completed graph line"
+        );
+    }
+
+    #[test]
+    fn status_bar_does_not_add_a_second_line() {
         let _lock = lock_tests();
         let before = live_count();
-        let p = InteractiveProgress::new(
+        let backup = InteractiveProgress::new(
+            "backing up...",
+            ProgressType::Bytes,
+            Duration::from_millis(100),
+        );
+        assert_eq!(live_count(), before + 1);
+        let uploading = InteractiveProgress::new(
             "uploading",
             ProgressType::Status,
             Duration::from_millis(100),
         );
-        assert_eq!(live_count(), before);
-        p.set_message("1 new  0 changed  0 B added");
+        uploading.set_message("1 new  0 changed  0 B added");
         assert_eq!(live_count(), before + 1);
-        p.finish();
+        backup.finish();
+        uploading.finish();
         assert_eq!(live_count(), before);
     }
 
@@ -1047,7 +977,7 @@ mod tests {
     #[derive(Debug)]
     struct VisibleTerm;
 
-    impl TermLike for VisibleTerm {
+    impl indicatif::TermLike for VisibleTerm {
         fn width(&self) -> u16 {
             80
         }
@@ -1089,7 +1019,7 @@ mod tests {
 
     impl Drop for RestoreStderrTarget {
         fn drop(&mut self) {
-            install_progress_draw_target();
+            multi_progress().set_draw_target(ProgressDrawTarget::stderr());
         }
     }
 
@@ -1140,45 +1070,12 @@ mod tests {
     }
 
     #[test]
-    fn write_wrapping_inserts_newline_between_padded_bars() {
-        let mut col = 0;
-        let mut out = String::new();
-        write_wrapping(
-            "reading-index...............................0",
-            &mut col,
-            80,
-            |s| {
-                out.push_str(s);
-                Ok(())
-            },
-        )
-        .unwrap();
-        write_wrapping(&" ".repeat(80 - col), &mut col, 80, |s| {
-            out.push_str(s);
-            Ok(())
-        })
-        .unwrap();
-        assert!(
-            out.ends_with('\n'),
-            "padding to width must end the line: {out:?}"
-        );
-        write_wrapping("getting-snapshot", &mut col, 80, |s| {
-            out.push_str(s);
-            Ok(())
-        })
-        .unwrap();
-        let first = out.split('\n').next().unwrap();
-        assert!(!first.contains("getting-snapshot"));
-        assert!(out.contains("getting-snapshot"));
-    }
-
-    #[test]
     fn bytes_template_is_valid_indicatif_style() {
         for width in [80, 120] {
             let template = bytes_layout(width, true).template();
             _ = ProgressStyle::default_bar()
                 .with_key("my_eta", |_: &ProgressState, w: &mut dyn Write| {
-                    let _ = write!(w, "-");
+                    let _ = write!(w, "");
                 })
                 .template(&template)
                 .expect(&template);
