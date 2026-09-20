@@ -20,7 +20,9 @@ use log4rs::{
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 
-use crate::config::progress_options::{log_above_progress_bars, multi_progress};
+use crate::config::progress_options::{
+    log_above_progress_bars, multi_progress, take_progress_break,
+};
 
 /// Maximum console log records held while the TUI owns the terminal.
 const MAX_CAPTURED_CONSOLE_LOGS: usize = 256;
@@ -255,6 +257,7 @@ impl log4rs::append::Append for PbPauseAppender {
             return Ok(());
         }
         if !log_above_progress_bars() {
+            take_progress_break();
             return self.console.append(record);
         }
         let msg = format_console_record(&self.encoder, record);

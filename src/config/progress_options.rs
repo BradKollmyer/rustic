@@ -35,6 +35,7 @@ pub fn multi_progress() -> &'static MultiProgress {
 }
 
 static LIVE_INTERACTIVE_BARS: AtomicUsize = AtomicUsize::new(0);
+static NEED_PROGRESS_BREAK: AtomicBool = AtomicBool::new(false);
 
 /// True while at least one interactive progress bar is on screen.
 ///
@@ -53,14 +54,18 @@ pub(crate) fn log_above_progress_bars() -> bool {
     !multi_progress().is_hidden() && has_live_progress_bars()
 }
 
-/// Park the cursor on a clean line after the last bar is gone.
+/// Clear leftover bar cells before the next console log.
 ///
-/// `finish_and_clear` does not write a newline, so the next `info!` would start
-/// on the leftover bar row and leave the tail of a longer status line visible.
-fn end_progress_display() {
+/// Called from the log appender when bars have just gone away, not at every
+/// bar finish — otherwise index/parent counters flash a blank line between them.
+/// `\r` + erase-line parks the cursor at column 0 without inserting a blank row.
+pub(crate) fn take_progress_break() {
+    if !NEED_PROGRESS_BREAK.swap(false, Ordering::Relaxed) {
+        return;
+    }
     let _ = multi_progress().clear();
     let mut stderr = std::io::stderr().lock();
-    let _ = stderr.write_all(b"\r\x1b[K\n");
+    let _ = stderr.write_all(b"\r\x1b[K");
     let _ = stderr.flush();
 }
 
@@ -301,7 +306,9 @@ impl InteractiveProgress {
         let style = Self::initial_style(kind);
         let bar = ProgressBar::new(0).with_style(style);
         bar.set_prefix(prefix.to_string());
-        let shown = !matches!(kind, ProgressType::Status);
+        // Empty prefix is used for index/parent scans; a 40-column bar with no
+        // label just flashes and makes the start of backup look like stutter.
+        let shown = !matches!(kind, ProgressType::Status) && !prefix.is_empty();
         if shown {
             let bar = multi_progress().add(bar);
             bar.enable_steady_tick(tick_interval);
@@ -331,6 +338,7 @@ impl InteractiveProgress {
             .is_ok()
         {
             _ = LIVE_INTERACTIVE_BARS.fetch_add(1, Ordering::Relaxed);
+            NEED_PROGRESS_BREAK.store(false, Ordering::Relaxed);
         }
     }
 
@@ -342,7 +350,7 @@ impl InteractiveProgress {
         {
             let prev = LIVE_INTERACTIVE_BARS.fetch_sub(1, Ordering::Relaxed);
             if prev == 1 {
-                end_progress_display();
+                NEED_PROGRESS_BREAK.store(true, Ordering::Relaxed);
             }
         }
     }
@@ -425,6 +433,9 @@ impl RusticProgress for InteractiveProgress {
 
     fn set_title(&self, title: &str) {
         self.bar.set_prefix(title.to_string());
+        if !title.is_empty() {
+            self.ensure_shown();
+        }
     }
 
     fn inc(&self, inc: u64) {
@@ -827,6 +838,32 @@ mod tests {
             assert_eq!(live_count(), before + 1);
         }
         assert_eq!(live_count(), before);
+    }
+
+    #[test]
+    fn empty_prefix_counter_is_not_shown() {
+        let _lock = lock_tests();
+        let before = live_count();
+        let p = InteractiveProgress::new("", ProgressType::Counter, Duration::from_millis(100));
+        assert_eq!(live_count(), before);
+        p.finish();
+        assert_eq!(live_count(), before);
+    }
+
+    #[test]
+    fn last_bar_defers_line_break_until_taken() {
+        let _lock = lock_tests();
+        NEED_PROGRESS_BREAK.store(false, Ordering::Relaxed);
+        let p = InteractiveProgress::new(
+            "backing up...",
+            ProgressType::Bytes,
+            Duration::from_millis(100),
+        );
+        assert!(!NEED_PROGRESS_BREAK.load(Ordering::Relaxed));
+        p.finish();
+        assert!(NEED_PROGRESS_BREAK.load(Ordering::Relaxed));
+        take_progress_break();
+        assert!(!NEED_PROGRESS_BREAK.load(Ordering::Relaxed));
     }
 
     #[test]
