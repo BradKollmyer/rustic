@@ -211,7 +211,7 @@ codegen-units = 1
 
 # Pin the validated fixed-cadence scheduler; benchmark results are recorded locally.
 [patch.crates-io]
-storj = { git = "https://github.com/BradKollmyer/storj-uplink.git", rev = "a2f680843d560f2e72a5e03908032f81d60da6c0" }
+storj = { git = "https://github.com/BradKollmyer/uplink-rs.git", rev = "a2f680843d560f2e72a5e03908032f81d60da6c0" }
 
 # Allows quick RPM file generation, if "cargo-generate-rpm" is installed:
 #  cargo build --release; cargo generate-rpm
