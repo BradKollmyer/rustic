@@ -6191,7 +6191,7 @@ dependencies = [
  "rhai",
  "rstest",
  "rustic_backend",
- "rustic_core 0.13.0 (git+https://github.com/BradKollmyer/rustic_core?rev=a37714a04cccc4c561fb9e4f697558c6d5b9f67b)",
+ "rustic_core 0.13.0 (git+https://github.com/BradKollmyer/rustic_core?rev=99412e4724a5023a225b341a7aa16b414f89b728)",
  "rustic_testing",
  "scopeguard",
  "self_update",
@@ -6211,7 +6211,7 @@ dependencies = [
 [[package]]
 name = "rustic_backend"
 version = "0.7.0"
-source = "git+https://github.com/BradKollmyer/rustic_core?rev=a37714a04cccc4c561fb9e4f697558c6d5b9f67b#a37714a04cccc4c561fb9e4f697558c6d5b9f67b"
+source = "git+https://github.com/BradKollmyer/rustic_core?rev=99412e4724a5023a225b341a7aa16b414f89b728#99412e4724a5023a225b341a7aa16b414f89b728"
 dependencies = [
  "aho-corasick",
  "backon",
@@ -6230,7 +6230,7 @@ dependencies = [
  "rand 0.10.2",
  "rayon",
  "reqwest",
- "rustic_core 0.13.0 (git+https://github.com/BradKollmyer/rustic_core?rev=a37714a04cccc4c561fb9e4f697558c6d5b9f67b)",
+ "rustic_core 0.13.0 (git+https://github.com/BradKollmyer/rustic_core?rev=99412e4724a5023a225b341a7aa16b414f89b728)",
  "semver",
  "serde",
  "storj",
@@ -6305,7 +6305,7 @@ dependencies = [
 [[package]]
 name = "rustic_core"
 version = "0.13.0"
-source = "git+https://github.com/BradKollmyer/rustic_core?rev=a37714a04cccc4c561fb9e4f697558c6d5b9f67b#a37714a04cccc4c561fb9e4f697558c6d5b9f67b"
+source = "git+https://github.com/BradKollmyer/rustic_core?rev=99412e4724a5023a225b341a7aa16b414f89b728#99412e4724a5023a225b341a7aa16b414f89b728"
 dependencies = [
  "aes256ctr_poly1305aes",
  "backon",
@@ -6334,7 +6334,6 @@ dependencies = [
  "jiff",
  "lockable",
  "log",
- "memchr",
  "nix 0.31.3",
  "pariter",
  "path-dedot",
@@ -7108,8 +7107,8 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "storj"
-version = "1.1.0"
-source = "git+https://github.com/BradKollmyer/uplink-rs.git?rev=a2f680843d560f2e72a5e03908032f81d60da6c0#a2f680843d560f2e72a5e03908032f81d60da6c0"
+version = "1.1.1"
+source = "git+https://github.com/BradKollmyer/uplink-rs.git?rev=bb320c052fa808bfe60d683de167af47421544e9#bb320c052fa808bfe60d683de167af47421544e9"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -7128,8 +7127,8 @@ dependencies = [
 
 [[package]]
 name = "storj-access"
-version = "1.1.0"
-source = "git+https://github.com/BradKollmyer/uplink-rs.git?rev=a2f680843d560f2e72a5e03908032f81d60da6c0#a2f680843d560f2e72a5e03908032f81d60da6c0"
+version = "1.1.1"
+source = "git+https://github.com/BradKollmyer/uplink-rs.git?rev=bb320c052fa808bfe60d683de167af47421544e9#bb320c052fa808bfe60d683de167af47421544e9"
 dependencies = [
  "bs58",
  "getrandom 0.4.3",
@@ -7142,16 +7141,16 @@ dependencies = [
 
 [[package]]
 name = "storj-ec"
-version = "1.1.0"
-source = "git+https://github.com/BradKollmyer/uplink-rs.git?rev=a2f680843d560f2e72a5e03908032f81d60da6c0#a2f680843d560f2e72a5e03908032f81d60da6c0"
+version = "1.1.1"
+source = "git+https://github.com/BradKollmyer/uplink-rs.git?rev=bb320c052fa808bfe60d683de167af47421544e9#bb320c052fa808bfe60d683de167af47421544e9"
 dependencies = [
  "thiserror 2.0.20",
 ]
 
 [[package]]
 name = "storj-encryption"
-version = "1.1.0"
-source = "git+https://github.com/BradKollmyer/uplink-rs.git?rev=a2f680843d560f2e72a5e03908032f81d60da6c0#a2f680843d560f2e72a5e03908032f81d60da6c0"
+version = "1.1.1"
+source = "git+https://github.com/BradKollmyer/uplink-rs.git?rev=bb320c052fa808bfe60d683de167af47421544e9#bb320c052fa808bfe60d683de167af47421544e9"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -7164,8 +7163,8 @@ dependencies = [
 
 [[package]]
 name = "storj-proto"
-version = "1.1.0"
-source = "git+https://github.com/BradKollmyer/uplink-rs.git?rev=a2f680843d560f2e72a5e03908032f81d60da6c0#a2f680843d560f2e72a5e03908032f81d60da6c0"
+version = "1.1.1"
+source = "git+https://github.com/BradKollmyer/uplink-rs.git?rev=bb320c052fa808bfe60d683de167af47421544e9#bb320c052fa808bfe60d683de167af47421544e9"
 dependencies = [
  "prost",
  "prost-types",
@@ -7175,8 +7174,8 @@ dependencies = [
 
 [[package]]
 name = "storj-rpc"
-version = "1.1.0"
-source = "git+https://github.com/BradKollmyer/uplink-rs.git?rev=a2f680843d560f2e72a5e03908032f81d60da6c0#a2f680843d560f2e72a5e03908032f81d60da6c0"
+version = "1.1.1"
+source = "git+https://github.com/BradKollmyer/uplink-rs.git?rev=bb320c052fa808bfe60d683de167af47421544e9#bb320c052fa808bfe60d683de167af47421544e9"
 dependencies = [
  "bs58",
  "futures-util",
@@ -7197,8 +7196,8 @@ dependencies = [
 
 [[package]]
 name = "storj-uplink"
-version = "1.1.0"
-source = "git+https://github.com/BradKollmyer/uplink-rs.git?rev=a2f680843d560f2e72a5e03908032f81d60da6c0#a2f680843d560f2e72a5e03908032f81d60da6c0"
+version = "1.1.1"
+source = "git+https://github.com/BradKollmyer/uplink-rs.git?rev=bb320c052fa808bfe60d683de167af47421544e9#bb320c052fa808bfe60d683de167af47421544e9"
 dependencies = [
  "blake3",
  "ed25519-dalek",
